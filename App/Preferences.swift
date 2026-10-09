@@ -58,7 +58,7 @@ final class Preferences: ObservableObject {
     private init() {
         defaults.register(defaults: [
             Key.historyLimit: ClipHistory.defaultCapacity,
-            Key.pasteOrder: PasteOrder.lastInFirstOut.rawValue,
+            Key.pasteOrder: PasteOrder.firstInFirstOut.rawValue,
             Key.pasteOnSelect: true,
             Key.syncEnabled: true,
             Key.forgetAfterDays: 0,
@@ -68,7 +68,7 @@ final class Preferences: ObservableObject {
             Key.recordingPaused: false,
         ])
         historyLimit = defaults.integer(forKey: Key.historyLimit)
-        pasteOrder = PasteOrder(rawValue: defaults.string(forKey: Key.pasteOrder) ?? "") ?? .lastInFirstOut
+        pasteOrder = PasteOrder(rawValue: defaults.string(forKey: Key.pasteOrder) ?? "") ?? .firstInFirstOut
         pasteOnSelect = defaults.bool(forKey: Key.pasteOnSelect)
         syncEnabled = defaults.bool(forKey: Key.syncEnabled)
         forgetAfterDays = defaults.integer(forKey: Key.forgetAfterDays)

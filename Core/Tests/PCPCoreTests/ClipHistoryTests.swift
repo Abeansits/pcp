@@ -31,6 +31,30 @@ final class ClipHistoryTests: XCTestCase {
         XCTAssertNil(h.pop(order: .firstInFirstOut))
     }
 
+    func testCopyingAfterAPauseStartsAFreshStack() {
+        var h = ClipHistory()
+        h.record("stale 1", now: t(0))
+        h.record("stale 2", now: t(60))
+        // 20 minutes later, a new copy/paste session.
+        h.record("A", now: t(60 + 20 * 60))
+        h.record("B", now: t(60 + 21 * 60))
+        XCTAssertEqual(h.pop(order: .firstInFirstOut)?.text, "A")
+        XCTAssertEqual(h.pop(order: .firstInFirstOut)?.text, "B")
+        XCTAssertNil(h.pop(order: .firstInFirstOut))
+        XCTAssertEqual(h.items.count, 4, "history keeps everything")
+    }
+
+    func testPastingKeepsTheStackAlive() {
+        var h = ClipHistory()
+        h.record("A", now: t(0))
+        h.record("B", now: t(10))
+        XCTAssertEqual(h.pop(order: .firstInFirstOut, now: t(14 * 60))?.text, "A")
+        // Copy 14 min after the last paste: still the same session.
+        h.record("C", now: t(28 * 60))
+        XCTAssertEqual(h.pop(order: .firstInFirstOut)?.text, "B")
+        XCTAssertEqual(h.pop(order: .firstInFirstOut)?.text, "C")
+    }
+
     func testClearStackKeepsHistory() {
         var h = ClipHistory()
         h.record("A", now: t(1))

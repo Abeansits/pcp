@@ -12,7 +12,7 @@ The menu bar paperclip shows how many items are waiting on the stack.
 
 ## Features
 
-- **Stack paste.** ⇧⌘V pastes newest-first by default (copy A B C → paste C B A). Settings can switch it to copy order (A B C). Popping removes an item from the stack, not from history.
+- **Stack paste.** ⇧⌘V pastes in copy order (copy A B C → paste A B C); Settings can switch it to newest-first (C B A). Popping removes an item from the stack, not from history. Copying after a 15-minute pause starts a fresh stack, so ⇧⌘V never digs up something you copied hours ago.
 - **History**: up to 1000 items by default, deduplicated (copying the same text again moves it to the top), searchable (every word must match, case- and accent-insensitive). You can also have items forgotten after a day, week, 30 or 90 days.
 - **Password handling**:
   - Copies that password managers mark as concealed (`org.nspasteboard.ConcealedType` & friends) are **never recorded**. 1Password, Bitwarden, KeePassXC, Apple Passwords and Keychain Access do this.

@@ -6,17 +6,22 @@ import Foundation
 ///   what gets searched and synced.
 /// - `stack` is the local paste stack: ids of things copied on *this* Mac that
 ///   haven't been pasted with ⇧⌘V yet. Items synced in from other devices are
-///   added to history but not to the stack.
+///   added to history but not to the stack. Copying after a pause of
+///   `stackIdleTimeout` starts a fresh stack, so ⇧⌘V never digs up something
+///   copied hours ago (which matters most in copy order).
 ///
 /// Every mutation returns a `SyncDelta` describing what must be pushed to the
 /// cloud. Sensitive items never appear in a delta.
 public struct ClipHistory: Codable, Equatable, Sendable {
     public static let defaultCapacity = 1000
     public static let stackCapacity = 100
+    public static let stackIdleTimeout: TimeInterval = 15 * 60
 
     public private(set) var items: [ClipItem] = []
     /// Bottom … top. The top (most recent push) is the last element.
     public private(set) var stack: [UUID] = []
+    /// Last push to or pop from the stack.
+    public private(set) var stackUpdatedAt: Date?
     public private(set) var capacity: Int
 
     public init(capacity: Int = ClipHistory.defaultCapacity) {
@@ -87,8 +92,12 @@ public struct ClipHistory: Codable, Equatable, Sendable {
             id = item.id
             if !sensitive { delta.save(id) }
         }
+        if let last = stackUpdatedAt, now.timeIntervalSince(last) > Self.stackIdleTimeout {
+            stack.removeAll()
+        }
         stack.removeAll { $0 == id }
         stack.append(id)
+        stackUpdatedAt = now
         if stack.count > Self.stackCapacity {
             stack.removeFirst(stack.count - Self.stackCapacity)
         }
@@ -97,7 +106,8 @@ public struct ClipHistory: Codable, Equatable, Sendable {
     }
 
     /// ⇧⌘V: take the next item off the paste stack. History is untouched.
-    public mutating func pop(order: PasteOrder) -> ClipItem? {
+    public mutating func pop(order: PasteOrder, now: Date = Date()) -> ClipItem? {
+        if !stack.isEmpty { stackUpdatedAt = now }
         while !stack.isEmpty {
             let id = order == .lastInFirstOut ? stack.removeLast() : stack.removeFirst()
             if let item = item(id) { return item }

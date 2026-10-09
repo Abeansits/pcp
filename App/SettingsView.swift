@@ -22,8 +22,8 @@ struct SettingsView: View {
 
             Section("Pasting") {
                 Picker("⇧⌘V pastes", selection: $prefs.pasteOrder) {
-                    Text("Newest first (copy A B C → paste C B A)").tag(PasteOrder.lastInFirstOut)
                     Text("In copy order (copy A B C → paste A B C)").tag(PasteOrder.firstInFirstOut)
+                    Text("Newest first (copy A B C → paste C B A)").tag(PasteOrder.lastInFirstOut)
                 }
                 Toggle("Paste immediately when picking from history", isOn: $prefs.pasteOnSelect)
                 HStack {
