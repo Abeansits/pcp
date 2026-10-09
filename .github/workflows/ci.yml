@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Core tests
+        run: cd Core && swift test
+      - name: Generate Xcode project
+        run: brew install xcodegen && xcodegen generate
+      - name: Build app (unsigned)
+        run: |
+          xcodebuild -project PCP.xcodeproj -scheme PCP -configuration Debug \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
