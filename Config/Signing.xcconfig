@@ -1,0 +1,6 @@
+// Signing defaults. Don't edit this file: copy Local.xcconfig.example to
+// Local.xcconfig (git-ignored) and put your team id and bundle id there.
+DEVELOPMENT_TEAM =
+PCP_BUNDLE_ID = com.example.pcp
+
+#include? "Local.xcconfig"

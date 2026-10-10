@@ -1,0 +1,116 @@
+import AppKit
+import Carbon.HIToolbox
+
+/// System-wide shortcuts via Carbon's RegisterEventHotKey: no Accessibility
+/// permission needed, no third-party dependency, stable for 20+ years.
+@MainActor
+final class HotKeyCenter {
+    private struct Entry {
+        let character: Character
+        let modifiers: UInt32
+        let action: () -> Void
+        var ref: EventHotKeyRef?
+    }
+
+    private var entries: [UInt32: Entry] = [:]
+    private var nextID: UInt32 = 1
+    private var handler: EventHandlerRef?
+    private static let signature: OSType = 0x5043_5021 // 'PCP!'
+
+    init() {
+        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, userData -> OSStatus in
+            guard let event, let userData else { return OSStatus(eventNotHandledErr) }
+            var hotKeyID = EventHotKeyID()
+            let status = GetEventParameter(
+                event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID
+            )
+            guard status == noErr else { return status }
+            let center = Unmanaged<HotKeyCenter>.fromOpaque(userData).takeUnretainedValue()
+            MainActor.assumeIsolated { center.entries[hotKeyID.id]?.action() }
+            return noErr
+        }, 1, &spec, Unmanaged.passUnretained(self).toOpaque(), &handler)
+
+        // Shortcuts are bound to key codes, so follow keyboard layout switches.
+        DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reregisterAll() }
+        }
+    }
+
+    /// Registers ⌘⇧`character` etc. Returns false if another app already owns it.
+    @discardableResult
+    func register(_ character: Character, modifiers: UInt32, action: @escaping () -> Void) -> Bool {
+        let id = nextID
+        nextID += 1
+        entries[id] = Entry(character: character, modifiers: modifiers, action: action)
+        return install(id)
+    }
+
+    private func install(_ id: UInt32) -> Bool {
+        guard var entry = entries[id] else { return false }
+        let keyCode = KeyboardLayout.keyCode(for: entry.character) ?? KeyboardLayout.ansiKeyCode(for: entry.character)
+        var ref: EventHotKeyRef?
+        let status = RegisterEventHotKey(
+            UInt32(keyCode), entry.modifiers, EventHotKeyID(signature: Self.signature, id: id),
+            GetApplicationEventTarget(), 0, &ref
+        )
+        entry.ref = ref
+        entries[id] = entry
+        if status != noErr {
+            Log.app.error("Could not register shortcut for \(String(entry.character), privacy: .public): \(status)")
+        }
+        return status == noErr
+    }
+
+    private func reregisterAll() {
+        for (id, entry) in entries {
+            if let ref = entry.ref { UnregisterEventHotKey(ref) }
+            _ = install(id)
+        }
+    }
+}
+
+enum KeyboardLayout {
+    /// The key code that produces `character` together with ⌘ in the current
+    /// layout (so Dvorak, AZERTY, "Dvorak – QWERTY ⌘" all do the right thing).
+    static func keyCode(for character: Character) -> CGKeyCode? {
+        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+              let raw = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
+        else { return nil }
+        let layoutData = Unmanaged<CFData>.fromOpaque(raw).takeUnretainedValue() as Data
+        let target = Array(String(character).lowercased().utf16)
+        let commandModifier = UInt32((cmdKey >> 8) & 0xFF)
+
+        return layoutData.withUnsafeBytes { buffer -> CGKeyCode? in
+            guard let layout = buffer.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else { return nil }
+            for code in UInt16(0)..<128 {
+                var deadKeyState: UInt32 = 0
+                var length = 0
+                var chars = [UniChar](repeating: 0, count: 4)
+                let status = UCKeyTranslate(
+                    layout, code, UInt16(kUCKeyActionDisplay), commandModifier,
+                    UInt32(LMGetKbdType()), OptionBits(kUCKeyTranslateNoDeadKeysMask),
+                    &deadKeyState, chars.count, &length, &chars
+                )
+                if status == noErr, length == target.count, Array(chars.prefix(length)) == target {
+                    return CGKeyCode(code)
+                }
+            }
+            return nil
+        }
+    }
+
+    /// Fallback for layouts without Latin letters (macOS maps ⌘ shortcuts to
+    /// the QWERTY positions there).
+    static func ansiKeyCode(for character: Character) -> CGKeyCode {
+        switch character {
+        case "c": CGKeyCode(kVK_ANSI_C)
+        case "v": CGKeyCode(kVK_ANSI_V)
+        default: CGKeyCode(kVK_ANSI_V)
+        }
+    }
+}

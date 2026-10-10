@@ -1,0 +1,8 @@
+.DS_Store
+/build/
+/PCP.xcodeproj/
+Core/.build/
+Core/.swiftpm/
+xcuserdata/
+DerivedData/
+Config/Local.xcconfig
