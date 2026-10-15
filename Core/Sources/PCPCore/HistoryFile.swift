@@ -21,6 +21,9 @@ public struct HistoryFile: Sendable {
         )
         try data.write(to: url, options: .atomic)
         // Owner-only: clipboard history is nobody else's business.
+        // createDirectory leaves an existing directory at 755, so set it every save.
+        let directory = url.deletingLastPathComponent()
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 

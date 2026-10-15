@@ -200,10 +200,11 @@ final class CloudSync: ObservableObject {
         pendingMetadataSave?.cancel()
         pendingMetadataSave = nil
         do {
-            try FileManager.default.createDirectory(
-                at: metadataURL.deletingLastPathComponent(), withIntermediateDirectories: true
-            )
+            let directory = metadataURL.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try JSONEncoder().encode(metadata).write(to: metadataURL, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: metadataURL.path)
         } catch {
             Log.sync.error("Saving sync state failed: \(error.localizedDescription, privacy: .public)")
         }

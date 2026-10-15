@@ -20,12 +20,25 @@ The menu bar paperclip shows how many items are waiting on the stack.
   - Text that *looks* like a password or API token (random mixed-case/digit/symbol strings, `ghp_…`, `sk-…`, `AKIA…`, JWTs, private keys) is kept **in memory only** for 60 s so ⇧⌘V still works. It is never written to disk and never synced. You can also choose "never store".
 - **iCloud sync** across your Macs using the private CloudKit database. Clip text and timestamps are stored in CloudKit's `encryptedValues`, which are **end-to-end encrypted** with keys in your iCloud Keychain, so Apple can't read them. The stack is per-Mac; history is shared.
 - **Light on resources.** It checks the pasteboard's change counter twice a second (an integer read) and only reads contents when something changed. Global shortcuts use Carbon `RegisterEventHotKey`, which is stable, needs no permission and doesn't install a keyboard tap.
-- **Few moving parts.** Only public, long-stable APIs: `NSPasteboard`, Carbon hot keys, `CGEvent`, and `CKSyncEngine`. History is a JSON file written atomically (`~/Library/Application Support/PCP/history.json`, mode 600).
+- **Few moving parts.** Only public, long-stable APIs: `NSPasteboard`, Carbon hot keys, `CGEvent`, and `CKSyncEngine`. History is a JSON file written atomically (`~/Library/Application Support/PCP/history.json`, mode 600, directory mode 700).
 
 ## Build & install
 
 Requirements: macOS 14+, Xcode 16+, [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
-iCloud sync needs an Apple Developer Program membership, because CloudKit requires a signed app with an iCloud container. Everything else works without one.
+
+iCloud sync needs a **paid** Apple Developer Program membership. A free Apple ID cannot create an iCloud container. Its Personal Team profiles also expire after 7 days, and every re-sign asks for Accessibility again. For one Mac and no sync, use the ad-hoc install.
+
+### This Mac, no iCloud
+
+```sh
+make install
+```
+
+That builds a Release app with the CloudKit entitlement left out, ad-hoc signs it, and copies it to `~/Applications/PCP.app`. Pass `PREFIX=/Applications` if that directory is writable. Quit the running copy from the menu bar first, so the last clipboard changes are flushed, then open the installed app. Turn on **Launch at login** in its Settings only after it lives in that folder. The registration points at that path.
+
+History is `~/Library/Application Support/PCP/history.json`. The path does not include the bundle id, so a later signed build reads the same clips. Preferences follow the bundle id. Each `make install` is a new ad-hoc signature, so macOS asks for Accessibility again and the login item may need to be allowed again. If paste stops, remove PCP from the Accessibility list and add it back. Run one copy. A second copy writes the same file, and the last save wins.
+
+### iCloud sync
 
 ```sh
 cp Config/Local.xcconfig.example Config/Local.xcconfig   # set your Team ID + a unique bundle id
@@ -49,8 +62,9 @@ Release builds talk to the CloudKit **production** environment. Before using one
 ## Development
 
 ```sh
-make test     # unit tests for the core logic (runs on macOS and Linux)
-make build    # Release build via xcodebuild
+make test       # unit tests for the core logic (runs on macOS and Linux)
+make build      # signed Release build (needs Config/Local.xcconfig and a paid team)
+make install    # ad-hoc Release app in ~/Applications, no iCloud
 ```
 
 Layout:

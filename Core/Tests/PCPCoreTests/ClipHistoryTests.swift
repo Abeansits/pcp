@@ -102,6 +102,27 @@ final class ClipHistoryTests: XCTestCase {
         XCTAssertEqual(h.pop(order: .lastInFirstOut)?.text, "B")
     }
 
+    func testRecopyAsSecretPullsTheCloudCopy() {
+        var h = ClipHistory()
+        let id = h.record("hunter2!X", now: t(1)).saved.first!
+        let delta = h.record("hunter2!X", sensitive: true, expiresAt: t(60), now: t(2))
+        XCTAssertEqual(delta.deleted, [id])
+        XCTAssertTrue(delta.saved.isEmpty)
+        XCTAssertTrue(h.item(id)?.isSensitive == true)
+        XCTAssertTrue(h.isOnStack(id))
+        XCTAssertTrue(h.persistable().items.isEmpty)
+    }
+
+    func testRecopyWithDetectionOffMakesItNormalAgain() {
+        var h = ClipHistory()
+        h.record("hunter2!X", sensitive: true, expiresAt: t(30), now: t(1))
+        let delta = h.record("hunter2!X", now: t(2))
+        XCTAssertEqual(delta.saved.count, 1)
+        XCTAssertTrue(delta.deleted.isEmpty)
+        XCTAssertFalse(h.items[0].isSensitive)
+        XCTAssertEqual(h.persistable().items.map(\.text), ["hunter2!X"])
+    }
+
     func testSensitiveItemsAreNeverSyncedOrPersistedAndExpire() {
         var h = ClipHistory()
         h.record("normal", now: t(1))
@@ -197,6 +218,37 @@ final class ClipHistoryTests: XCTestCase {
         XCTAssertEqual(d2.stack, [idX], "stack entry follows the surviving id")
     }
 
+    func testRemoteRecordDoesNotDemoteASensitiveItem() {
+        var h = ClipHistory()
+        let first = h.record("hunter2!X", sensitive: true, expiresAt: t(60), now: t(1))
+        XCTAssertTrue(first.isEmpty)
+        let localId = h.items[0].id
+
+        let remoteId = UUID()
+        let byText = h.applyRemote(id: remoteId, text: "hunter2!X", createdAt: t(2), lastUsedAt: t(2))
+        XCTAssertEqual(byText.deleted, [remoteId])
+        XCTAssertTrue(byText.saved.isEmpty)
+        XCTAssertEqual(h.items.map(\.id), [localId])
+        XCTAssertTrue(h.item(localId)?.isSensitive == true)
+        XCTAssertEqual(h.stack, [localId])
+
+        let byId = h.applyRemote(id: localId, text: "hunter2!X", createdAt: t(1), lastUsedAt: t(3))
+        XCTAssertEqual(byId.deleted, [localId])
+        XCTAssertTrue(byId.saved.isEmpty)
+        XCTAssertTrue(h.item(localId)?.isSensitive == true)
+        XCTAssertEqual(h.item(localId)?.lastUsedAt, t(1))
+        XCTAssertTrue(h.persistable().items.isEmpty)
+    }
+
+    func testRemoteDeletionOfASecretKeepsItOnTheStack() {
+        var h = ClipHistory()
+        let id = h.record("hunter2!X", now: t(1)).saved.first!
+        _ = h.record("hunter2!X", sensitive: true, expiresAt: t(60), now: t(2))
+        h.applyRemoteDeletion(id)
+        XCTAssertTrue(h.item(id)?.isSensitive == true)
+        XCTAssertTrue(h.isOnStack(id))
+    }
+
     func testRemoteDeletionAndZoneWipe() {
         var h = ClipHistory()
         let a = h.record("A", now: t(1)).saved.first!
@@ -228,6 +280,8 @@ final class ClipHistoryTests: XCTestCase {
         XCTAssertEqual(loaded.stack, [h.items[1].id])
         let perms = try FileManager.default.attributesOfItem(atPath: file.url.path)[.posixPermissions] as? Int
         XCTAssertEqual(perms, 0o600)
+        let dirPerms = try FileManager.default.attributesOfItem(atPath: dir.path)[.posixPermissions] as? Int
+        XCTAssertEqual(dirPerms, 0o700)
     }
 
     func testPreviewCollapsesWhitespaceAndMasksSecrets() {
