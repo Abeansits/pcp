@@ -11,7 +11,8 @@ import Foundation
 ///   copied hours ago (which matters most in copy order).
 ///
 /// Every mutation returns a `SyncDelta` describing what must be pushed to the
-/// cloud. Sensitive items never appear in a delta.
+/// cloud. Sensitive items are never uploaded. A normal item that is later
+/// recognized as a secret is deleted from the cloud instead.
 public struct ClipHistory: Codable, Equatable, Sendable {
     public static let defaultCapacity = 1000
     public static let stackCapacity = 100
@@ -72,11 +73,16 @@ public struct ClipHistory: Codable, Equatable, Sendable {
         if let index = items.firstIndex(where: { $0.text == text }) {
             var existing = items.remove(at: index)
             existing.lastUsedAt = max(existing.lastUsedAt, now)
-            // A sensitive item copied again without looking sensitive gets
-            // promoted to a normal one; a normal item stays normal.
-            if existing.isSensitive {
-                existing.isSensitive = sensitive
-                existing.expiresAt = sensitive ? expiresAt : nil
+            if sensitive {
+                // A later copy that looks like a secret wins, and the cloud
+                // copy of the earlier normal item has to go.
+                if !existing.isSensitive { delta.delete(existing.id) }
+                existing.isSensitive = true
+                existing.expiresAt = expiresAt
+            } else if existing.isSensitive {
+                // Copied again with secret handling off: it becomes a normal clip.
+                existing.isSensitive = false
+                existing.expiresAt = nil
             }
             insertSorted(existing)
             id = existing.id
@@ -185,6 +191,12 @@ public struct ClipHistory: Codable, Equatable, Sendable {
 
         if let index = items.firstIndex(where: { $0.id == id }) {
             let local = items.remove(at: index)
+            if local.isSensitive {
+                // Same id can arrive after a normal item was upgraded to a
+                // secret. Leave the memory-only item alone.
+                insertSorted(local)
+                return SyncDelta()
+            }
             incoming.createdAt = min(local.createdAt, createdAt)
             incoming.lastUsedAt = max(local.lastUsedAt, lastUsedAt)
             insertSorted(incoming)
@@ -193,6 +205,12 @@ public struct ClipHistory: Codable, Equatable, Sendable {
             }
         } else if let index = items.firstIndex(where: { $0.text == text }) {
             let local = items.remove(at: index)
+            if local.isSensitive {
+                // Another device stored this text as a normal clip. Don't
+                // turn the memory-only copy into something that gets saved.
+                insertSorted(local)
+                return SyncDelta()
+            }
             let merged = ClipItem(
                 id: local.id.uuidString < id.uuidString ? local.id : id,
                 text: text,
