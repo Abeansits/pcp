@@ -36,7 +36,7 @@ make install
 
 That builds a Release app with the CloudKit entitlement left out, ad-hoc signs it, and copies it to `~/Applications/PCP.app`. Pass `PREFIX=/Applications` if that directory is writable. Quit the running copy from the menu bar first, so the last clipboard changes are flushed, then open the installed app. Turn on **Launch at login** in its Settings only after it lives in that folder. The registration points at that path.
 
-History is `~/Library/Application Support/PCP/history.json`. The path does not include the bundle id, so a later signed build reads the same clips. Preferences and the Accessibility grant follow the bundle id and the code signature. Run one copy. A second copy writes the same file, and the last save wins.
+History is `~/Library/Application Support/PCP/history.json`. The path does not include the bundle id, so a later signed build reads the same clips. Preferences follow the bundle id. Each `make install` is a new ad-hoc signature, so macOS asks for Accessibility again and the login item may need to be allowed again. If paste stops, remove PCP from the Accessibility list and add it back. Run one copy. A second copy writes the same file, and the last save wins.
 
 ### iCloud sync
 

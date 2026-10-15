@@ -192,10 +192,10 @@ public struct ClipHistory: Codable, Equatable, Sendable {
         if let index = items.firstIndex(where: { $0.id == id }) {
             let local = items.remove(at: index)
             if local.isSensitive {
-                // Same id can arrive after a normal item was upgraded to a
-                // secret. Leave the memory-only item alone.
+                // The server still has the plaintext (the upgrade's delete
+                // lost the race, or a peer saved over it). Drop that record.
                 insertSorted(local)
-                return SyncDelta()
+                return SyncDelta(deleted: [id])
             }
             incoming.createdAt = min(local.createdAt, createdAt)
             incoming.lastUsedAt = max(local.lastUsedAt, lastUsedAt)
@@ -206,10 +206,10 @@ public struct ClipHistory: Codable, Equatable, Sendable {
         } else if let index = items.firstIndex(where: { $0.text == text }) {
             let local = items.remove(at: index)
             if local.isSensitive {
-                // Another device stored this text as a normal clip. Don't
-                // turn the memory-only copy into something that gets saved.
+                // Another device stored this text in the clear. Keep the
+                // memory-only copy and delete theirs.
                 insertSorted(local)
-                return SyncDelta()
+                return SyncDelta(deleted: [id])
             }
             let merged = ClipItem(
                 id: local.id.uuidString < id.uuidString ? local.id : id,
@@ -233,7 +233,11 @@ public struct ClipHistory: Codable, Equatable, Sendable {
 
     /// A record was deleted in iCloud (by another device).
     public mutating func applyRemoteDeletion(_ id: UUID) {
-        items.removeAll { $0.id == id && !$0.isSensitive }
+        // A peer may delete the cloud record of a clip we have since marked
+        // sensitive. The memory-only item, and its place on the paste stack,
+        // stay until it expires.
+        if items.contains(where: { $0.id == id && $0.isSensitive }) { return }
+        items.removeAll { $0.id == id }
         stack.removeAll { $0 == id }
     }
 

@@ -224,17 +224,29 @@ final class ClipHistoryTests: XCTestCase {
         XCTAssertTrue(first.isEmpty)
         let localId = h.items[0].id
 
-        let byText = h.applyRemote(id: UUID(), text: "hunter2!X", createdAt: t(2), lastUsedAt: t(2))
-        XCTAssertTrue(byText.isEmpty)
+        let remoteId = UUID()
+        let byText = h.applyRemote(id: remoteId, text: "hunter2!X", createdAt: t(2), lastUsedAt: t(2))
+        XCTAssertEqual(byText.deleted, [remoteId])
+        XCTAssertTrue(byText.saved.isEmpty)
         XCTAssertEqual(h.items.map(\.id), [localId])
         XCTAssertTrue(h.item(localId)?.isSensitive == true)
         XCTAssertEqual(h.stack, [localId])
 
         let byId = h.applyRemote(id: localId, text: "hunter2!X", createdAt: t(1), lastUsedAt: t(3))
-        XCTAssertTrue(byId.isEmpty)
+        XCTAssertEqual(byId.deleted, [localId])
+        XCTAssertTrue(byId.saved.isEmpty)
         XCTAssertTrue(h.item(localId)?.isSensitive == true)
         XCTAssertEqual(h.item(localId)?.lastUsedAt, t(1))
         XCTAssertTrue(h.persistable().items.isEmpty)
+    }
+
+    func testRemoteDeletionOfASecretKeepsItOnTheStack() {
+        var h = ClipHistory()
+        let id = h.record("hunter2!X", now: t(1)).saved.first!
+        _ = h.record("hunter2!X", sensitive: true, expiresAt: t(60), now: t(2))
+        h.applyRemoteDeletion(id)
+        XCTAssertTrue(h.item(id)?.isSensitive == true)
+        XCTAssertTrue(h.isOnStack(id))
     }
 
     func testRemoteDeletionAndZoneWipe() {
