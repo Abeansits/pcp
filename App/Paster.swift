@@ -39,7 +39,7 @@ enum Paster {
             [.permitLocalMouseEvents, .permitSystemDefinedEvents],
             state: .eventSuppressionStateSuppressionInterval
         )
-        let v = KeyboardLayout.keyCode(for: "v") ?? KeyboardLayout.ansiKeyCode(for: "v")
+        let v = KeyboardLayout.keyCode(for: "v") ?? KeyboardLayout.ansiKeyCode(for: "v") ?? 9
         let down = CGEvent(keyboardEventSource: source, virtualKey: v, keyDown: true)
         let up = CGEvent(keyboardEventSource: source, virtualKey: v, keyDown: false)
         down?.flags = .maskCommand

@@ -80,18 +80,22 @@ final class StackPanelController {
     private let panel = FloatingPanel()
     private let viewModel: StackViewModel
     private let model: HistoryModel
-    private let onPick: (ClipItem) -> Void
+    private let prefs: Preferences
+    private let onPick: (ClipItem, Bool) -> Void
     private var keyMonitor: Any?
 
     var isVisible: Bool { panel.isVisible }
 
-    init(model: HistoryModel, onPick: @escaping (ClipItem) -> Void) {
+    init(model: HistoryModel, prefs: Preferences, onPick: @escaping (ClipItem, Bool) -> Void) {
         self.model = model
+        self.prefs = prefs
         self.onPick = onPick
         viewModel = StackViewModel(model: model)
-        panel.contentView = NSHostingView(rootView: StackView(viewModel: viewModel, onPick: { [weak self] index in
-            self?.pick(index)
-        }))
+        panel.contentView = NSHostingView(rootView: StackView(
+            viewModel: viewModel,
+            prefs: prefs,
+            onPick: { [weak self] index in self?.pick(index, rich: false) }
+        ))
         panel.onResignKey = { [weak self] in self?.close() }
     }
 
@@ -112,11 +116,11 @@ final class StackPanelController {
         panel.orderOut(nil)
     }
 
-    private func pick(_ index: Int) {
+    private func pick(_ index: Int, rich: Bool) {
         guard viewModel.results.indices.contains(index) else { NSSound.beep(); return }
         let item = viewModel.results[index]
         close()
-        onPick(item)
+        onPick(item, rich)
     }
 
     /// Centered horizontally, upper third of the screen the mouse is on.
@@ -162,23 +166,32 @@ final class StackPanelController {
         let command = mods.contains(.command)
         let code = Int(event.keyCode)
 
+        let option = mods.contains(.option)
         if command, let index = Self.digitKeyCodes[code] {
-            pick(index)
+            pick(index, rich: option)
+            return true
+        }
+        if command, option, code == kVK_UpArrow || code == kVK_DownArrow {
+            nudgeStack(sooner: code == kVK_UpArrow)
+            return true
+        }
+        if option, !command, code == kVK_Delete || code == kVK_ForwardDelete {
+            dropFromStack()
             return true
         }
         switch code {
         case kVK_Escape:
             close()
-        case kVK_DownArrow:
+        case kVK_DownArrow where !command && !option:
             viewModel.move(1)
-        case kVK_UpArrow:
+        case kVK_UpArrow where !command && !option:
             viewModel.move(-1)
         case kVK_PageDown:
             viewModel.move(8)
         case kVK_PageUp:
             viewModel.move(-8)
         case kVK_Return, kVK_ANSI_KeypadEnter:
-            pick(viewModel.selection)
+            pick(viewModel.selection, rich: option)
         case kVK_Delete where command, kVK_ForwardDelete where command:
             if viewModel.results.indices.contains(viewModel.selection) {
                 model.delete(viewModel.results[viewModel.selection].id)
@@ -190,12 +203,28 @@ final class StackPanelController {
         }
         return true
     }
+
+    private func selectedItem() -> ClipItem? {
+        guard viewModel.results.indices.contains(viewModel.selection) else { return nil }
+        return viewModel.results[viewModel.selection]
+    }
+
+    private func nudgeStack(sooner: Bool) {
+        guard let item = selectedItem(), model.history.isOnStack(item.id) else { NSSound.beep(); return }
+        model.moveOnStack(item.id, sooner: sooner, order: prefs.pasteOrder)
+    }
+
+    private func dropFromStack() {
+        guard let item = selectedItem(), model.history.isOnStack(item.id) else { NSSound.beep(); return }
+        model.removeFromStack(item.id)
+    }
 }
 
 // MARK: - View
 
 struct StackView: View {
     @ObservedObject var viewModel: StackViewModel
+    @ObservedObject var prefs: Preferences
     let onPick: (Int) -> Void
     @FocusState private var searchFocused: Bool
 
@@ -241,7 +270,7 @@ struct StackView: View {
                             item: item,
                             index: index,
                             isSelected: index == viewModel.selection,
-                            isOnStack: viewModel.model.history.isOnStack(item.id)
+                            stackPlace: viewModel.model.history.stackPlace(item.id, order: prefs.pasteOrder)
                         )
                         .id(item.id)
                         .contentShape(Rectangle())
@@ -261,10 +290,16 @@ struct StackView: View {
     }
 
     private var footer: some View {
-        HStack {
-            Text("\(viewModel.results.count) items")
-            Spacer()
-            Text("↩ paste   ⌘1–9 pick   ⌘⌫ delete   esc close")
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text("\(viewModel.results.count) items")
+                Spacer()
+                Text("↩ paste   ⌥↩ with style   ⌘1–9 pick   esc close")
+            }
+            HStack {
+                Spacer()
+                Text("⌥⌘↑↓ reorder stack   ⌥⌫ off stack   ⌘⌫ delete")
+            }
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -277,14 +312,21 @@ private struct Row: View {
     let item: ClipItem
     let index: Int
     let isSelected: Bool
-    let isOnStack: Bool
+    let stackPlace: Int?
 
     var body: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(isOnStack ? Color.accentColor : .clear)
-                .frame(width: 6, height: 6)
-                .help(isOnStack ? "On the paste stack (⇧⌘V)" : "")
+            Text(stackPlace.map(String.init) ?? "")
+                .font(.caption2.monospacedDigit())
+                .frame(width: 16, alignment: .trailing)
+                .foregroundStyle(isSelected ? .white.opacity(0.85) : .secondary)
+                .help(stackPlace == 1 ? "Pastes next" : (stackPlace == nil ? "" : "Stack position \(stackPlace!)"))
+            if item.hasRichText {
+                Image(systemName: "textformat")
+                    .font(.caption2)
+                    .foregroundStyle(isSelected ? .white.opacity(0.85) : .secondary)
+                    .help("Has formatting. ⌥↩ pastes it.")
+            }
             if item.isSensitive {
                 Image(systemName: "lock.fill")
                     .font(.caption)

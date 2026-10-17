@@ -39,6 +39,12 @@ public struct ClipHistory: Codable, Equatable, Sendable {
         stack.contains(id)
     }
 
+    /// 1 is the item ⇧⌘V would paste next. Nil when `id` is not on the stack.
+    public func stackPlace(_ id: UUID, order: PasteOrder) -> Int? {
+        guard let index = stack.firstIndex(of: id) else { return nil }
+        return order == .lastInFirstOut ? stack.count - index : index + 1
+    }
+
     /// The item ⇧⌘V would paste, without removing it.
     public func peek(order: PasteOrder) -> ClipItem? {
         let id = order == .lastInFirstOut ? stack.last : stack.first
@@ -64,11 +70,15 @@ public struct ClipHistory: Codable, Equatable, Sendable {
     @discardableResult
     public mutating func record(
         _ text: String,
+        html: String? = nil,
+        rtf: Data? = nil,
         sensitive: Bool = false,
         expiresAt: Date? = nil,
         now: Date = Date()
     ) -> SyncDelta {
         var delta = SyncDelta()
+        let richHTML = sensitive ? nil : html
+        let richRTF = sensitive || richHTML != nil ? nil : rtf
         let id: UUID
         if let index = items.firstIndex(where: { $0.text == text }) {
             var existing = items.remove(at: index)
@@ -79,10 +89,19 @@ public struct ClipHistory: Codable, Equatable, Sendable {
                 if !existing.isSensitive { delta.delete(existing.id) }
                 existing.isSensitive = true
                 existing.expiresAt = expiresAt
+                existing.html = nil
+                existing.rtf = nil
             } else if existing.isSensitive {
                 // Copied again with secret handling off: it becomes a normal clip.
                 existing.isSensitive = false
                 existing.expiresAt = nil
+                existing.html = richHTML
+                existing.rtf = richRTF
+            } else {
+                // The new copy wins, including when it is plain and the old
+                // one had a link. Stale formatting should not come back.
+                existing.html = richHTML
+                existing.rtf = richRTF
             }
             insertSorted(existing)
             id = existing.id
@@ -92,7 +111,9 @@ public struct ClipHistory: Codable, Equatable, Sendable {
                 text: text,
                 createdAt: now,
                 isSensitive: sensitive,
-                expiresAt: sensitive ? expiresAt : nil
+                expiresAt: sensitive ? expiresAt : nil,
+                html: richHTML,
+                rtf: richRTF
             )
             insertSorted(item)
             id = item.id
@@ -124,6 +145,24 @@ public struct ClipHistory: Codable, Equatable, Sendable {
     /// Forget what's waiting on the paste stack. History is untouched.
     public mutating func clearStack() {
         stack.removeAll()
+    }
+
+    /// Take one item off the stack without deleting it from history.
+    public mutating func removeFromStack(_ id: UUID, now: Date = Date()) {
+        let before = stack.count
+        stack.removeAll { $0 == id }
+        if stack.count != before { stackUpdatedAt = now }
+    }
+
+    /// Move one stack item toward (`sooner`) or away from the next paste.
+    public mutating func moveOnStack(_ id: UUID, sooner: Bool, order: PasteOrder, now: Date = Date()) {
+        guard let index = stack.firstIndex(of: id) else { return }
+        let step = (order == .firstInFirstOut) == sooner ? -1 : 1
+        let target = index + step
+        guard stack.indices.contains(target) else { return }
+        stack.remove(at: index)
+        stack.insert(id, at: target)
+        stackUpdatedAt = now
     }
 
     /// An item was picked from the panel: move it to the top of history and
@@ -199,6 +238,7 @@ public struct ClipHistory: Codable, Equatable, Sendable {
             }
             incoming.createdAt = min(local.createdAt, createdAt)
             incoming.lastUsedAt = max(local.lastUsedAt, lastUsedAt)
+            carryRichText(from: local, onto: &incoming)
             insertSorted(incoming)
             if incoming.lastUsedAt != lastUsedAt || incoming.createdAt != createdAt {
                 delta.save(id) // we know something newer than the server
@@ -211,12 +251,13 @@ public struct ClipHistory: Codable, Equatable, Sendable {
                 insertSorted(local)
                 return SyncDelta(deleted: [id])
             }
-            let merged = ClipItem(
+            var merged = ClipItem(
                 id: local.id.uuidString < id.uuidString ? local.id : id,
                 text: text,
                 createdAt: min(local.createdAt, createdAt),
                 lastUsedAt: max(local.lastUsedAt, lastUsedAt)
             )
+            carryRichText(from: local, onto: &merged)
             insertSorted(merged)
             if let stackIndex = stack.firstIndex(of: local.id) { stack[stackIndex] = merged.id }
             let loser = merged.id == id ? local.id : id
@@ -258,6 +299,14 @@ public struct ClipHistory: Codable, Equatable, Sendable {
     }
 
     // MARK: Private
+
+    /// Rich text is local. A cloud record only has the plain text, so a sync
+    /// must not wipe formatting we already stored for that text.
+    private func carryRichText(from local: ClipItem, onto item: inout ClipItem) {
+        guard item.text == local.text else { return }
+        item.html = local.html
+        item.rtf = local.rtf
+    }
 
     private mutating func insertSorted(_ item: ClipItem) {
         let index = items.firstIndex { $0.lastUsedAt < item.lastUsedAt } ?? items.endIndex

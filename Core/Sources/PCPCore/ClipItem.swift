@@ -1,6 +1,7 @@
 import Foundation
 
-/// One clipboard entry. Only plain text is stored.
+/// One clipboard entry. `text` is always plain. `html` or `rtf` is kept when
+/// the copy had formatting, and is only put back on the pasteboard on request.
 public struct ClipItem: Codable, Hashable, Identifiable, Sendable {
     public let id: UUID
     public var text: String
@@ -12,6 +13,12 @@ public struct ClipItem: Codable, Hashable, Identifiable, Sendable {
     /// never written to disk, never synced, and they expire.
     public var isSensitive: Bool
     public var expiresAt: Date?
+    /// HTML from the pasteboard, when the copy had formatting or links.
+    /// Plain text stays `text`. Nil when the copy was plain, or when the
+    /// item is sensitive.
+    public var html: String?
+    /// RTF from the pasteboard, kept only when there was no HTML.
+    public var rtf: Data?
 
     public init(
         id: UUID = UUID(),
@@ -19,7 +26,9 @@ public struct ClipItem: Codable, Hashable, Identifiable, Sendable {
         createdAt: Date,
         lastUsedAt: Date? = nil,
         isSensitive: Bool = false,
-        expiresAt: Date? = nil
+        expiresAt: Date? = nil,
+        html: String? = nil,
+        rtf: Data? = nil
     ) {
         self.id = id
         self.text = text
@@ -27,7 +36,11 @@ public struct ClipItem: Codable, Hashable, Identifiable, Sendable {
         self.lastUsedAt = lastUsedAt ?? createdAt
         self.isSensitive = isSensitive
         self.expiresAt = expiresAt
+        self.html = isSensitive ? nil : html
+        self.rtf = isSensitive ? nil : (html == nil ? rtf : nil)
     }
+
+    public var hasRichText: Bool { html != nil || rtf != nil }
 
     /// Single-line preview with whitespace collapsed, for list rows.
     public func preview(maxLength: Int = 200) -> String {

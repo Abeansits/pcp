@@ -9,8 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let prefs = Preferences.shared
     private lazy var model = HistoryModel(prefs: prefs)
     private lazy var sync = CloudSync(model: model)
-    private lazy var panel = StackPanelController(model: model) { [weak self] item in
-        self?.pick(item)
+    private lazy var panel = StackPanelController(model: model, prefs: prefs) { [weak self] item, rich in
+        self?.pick(item, rich: rich)
     }
     private let monitor = PasteboardMonitor()
     private let hotKeys = HotKeyCenter()
@@ -21,12 +21,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         model.onDelta = { [weak self] delta in self?.sync.enqueue(delta) }
 
-        monitor.onCopy = { [weak self] text, sourceApp in self?.handleCopy(text, from: sourceApp) }
+        monitor.onCopy = { [weak self] capture, sourceApp in self?.handleCopy(capture, from: sourceApp) }
         monitor.start()
-
-        let commandShift = UInt32(cmdKey | shiftKey)
-        hotKeys.register("c", modifiers: commandShift) { [weak self] in self?.panel.toggle() }
-        hotKeys.register("v", modifiers: commandShift) { [weak self] in self?.pasteAndPop() }
+        bindHotKeys()
 
         setUpStatusItem()
         observePreferences()
@@ -51,34 +48,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Actions
 
-    private func handleCopy(_ text: String, from sourceApp: String?) {
+    private func handleCopy(_ capture: ClipboardCapture, from sourceApp: String?) {
         guard !prefs.recordingPaused else { return }
         if let sourceApp, prefs.ignoredApps.contains(sourceApp) { return }
 
-        let isSecret = prefs.secretHandling != .off && SecretDetector.looksLikeSecret(text)
+        let isSecret = prefs.secretHandling != .off && SecretDetector.looksLikeSecret(capture.text)
         if isSecret && prefs.secretHandling == .neverStore { return }
         model.record(
-            text,
+            capture.text,
+            html: isSecret ? nil : capture.html,
+            rtf: isSecret ? nil : capture.rtf,
             sensitive: isSecret,
             expiresAt: isSecret ? Date().addingTimeInterval(prefs.secretTTL) : nil
         )
     }
 
-    /// ⇧⌘V: paste the next item from the stack and remove it from the stack.
-    private func pasteAndPop() {
+    /// Paste the next stack item and remove it from the stack.
+    /// `rich` also puts the stored HTML or RTF on the pasteboard.
+    private func pasteAndPop(rich: Bool = false) {
         monitor.poll() // pick up a copy from the last half second
         guard let item = model.pop(order: prefs.pasteOrder) else {
             NSSound.beep()
             return
         }
-        monitor.write(item.text, concealed: item.isSensitive)
+        monitor.write(item, rich: rich)
         Paster.paste()
     }
 
-    /// An item was chosen in the history panel.
-    private func pick(_ item: ClipItem) {
+    /// An item was chosen in the history panel. Only that item leaves the stack.
+    private func pick(_ item: ClipItem, rich: Bool) {
         model.use(item.id)
-        monitor.write(item.text, concealed: item.isSensitive)
+        monitor.write(item, rich: rich)
         guard prefs.pasteOnSelect else { return }
         // Give the previous app a moment to get keyboard focus back.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -86,10 +86,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    private func bindHotKeys() {
+        guard !prefs.isCapturingShortcut else {
+            hotKeys.unregisterAll()
+            return
+        }
+        hotKeys.unregisterAll()
+        let show = prefs.historyShortcut
+        let paste = prefs.pasteShortcut
+        hotKeys.register(show.character, modifiers: show.carbonModifiers) { [weak self] in self?.panel.toggle() }
+        hotKeys.register(paste.character, modifiers: paste.carbonModifiers) { [weak self] in self?.pasteAndPop() }
+        // ⌥ added to the paste shortcut pastes formatting, when the clip has any.
+        let styled = paste.addingOption()
+        if styled != paste {
+            hotKeys.register(styled.character, modifiers: styled.carbonModifiers) { [weak self] in
+                self?.pasteAndPop(rich: true)
+            }
+        }
+    }
+
     @objc private func showHistory() { panel.show() }
     @objc private func pasteNext() {
         // Let the menu close and focus return to the previous app first.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in self?.pasteAndPop() }
+    }
+    @objc private func pasteNextStyled() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in self?.pasteAndPop(rich: true) }
     }
     @objc private func togglePause() { prefs.recordingPaused.toggle() }
     @objc private func clearStack() { model.clearStack() }
@@ -134,32 +156,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.menu = menu
         statusItem = item
 
-        // Show how many items are waiting on the paste stack.
         model.$history
-            .map(\.stack.count)
-            .removeDuplicates()
-            .sink { [weak self] count in
-                self?.statusItem?.button?.title = count > 0 ? " \(count)" : ""
-            }
+            .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
+        updateStatusItem()
+    }
+
+    private func updateStatusItem() {
+        let count = model.history.stack.count
+        statusItem?.button?.title = count > 0 ? " \(count)" : ""
+        if let next = model.history.peek(order: prefs.pasteOrder) {
+            statusItem?.button?.toolTip = "Next: \(next.preview(maxLength: 80))"
+        } else {
+            statusItem?.button?.toolTip = "Nothing waiting to paste"
+        }
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        let commandShift: NSEvent.ModifierFlags = [.command, .shift]
+        let showShortcut = prefs.historyShortcut
+        let pasteShortcut = prefs.pasteShortcut
 
-        let show = NSMenuItem(title: "Show History", action: #selector(showHistory), keyEquivalent: "c")
-        show.keyEquivalentModifierMask = commandShift
+        let show = NSMenuItem(title: "Show History", action: #selector(showHistory), keyEquivalent: showShortcut.key)
+        show.keyEquivalentModifierMask = showShortcut.modifierFlags
         menu.addItem(show)
 
         let stackCount = model.history.stack.count
+        let next = model.history.peek(order: prefs.pasteOrder)
+        let pasteTitle: String
+        if let next {
+            pasteTitle = "Paste Next: \(next.preview(maxLength: 48))"
+        } else {
+            pasteTitle = "Paste Next"
+        }
         let paste = NSMenuItem(
-            title: stackCount > 0 ? "Paste Next (\(stackCount) on stack)" : "Paste Next",
+            title: pasteTitle,
             action: stackCount > 0 ? #selector(pasteNext) : nil,
-            keyEquivalent: "v"
+            keyEquivalent: pasteShortcut.key
         )
-        paste.keyEquivalentModifierMask = commandShift
+        paste.keyEquivalentModifierMask = pasteShortcut.modifierFlags
         menu.addItem(paste)
+        if stackCount > 0, next?.hasRichText == true, pasteShortcut.addingOption() != pasteShortcut {
+            let styled = NSMenuItem(
+                title: "Paste Next with Style",
+                action: #selector(pasteNextStyled),
+                keyEquivalent: pasteShortcut.key
+            )
+            styled.keyEquivalentModifierMask = pasteShortcut.addingOption().modifierFlags
+            menu.addItem(styled)
+        }
         menu.addItem(NSMenuItem(
             title: "Clear Stack", action: stackCount > 0 ? #selector(clearStack) : nil, keyEquivalent: ""
         ))
@@ -207,5 +252,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.statusItem?.button?.appearsDisabled = paused
             }
             .store(in: &cancellables)
+
+        prefs.$pasteOrder
+            .dropFirst()
+            .sink { [weak self] _ in self?.updateStatusItem() }
+            .store(in: &cancellables)
+
+        Publishers.Merge3(
+            prefs.$historyShortcut.dropFirst().map { _ in () },
+            prefs.$pasteShortcut.dropFirst().map { _ in () },
+            prefs.$isCapturingShortcut.dropFirst().map { _ in () }
+        )
+        .sink { [weak self] in self?.bindHotKeys() }
+        .store(in: &cancellables)
     }
 }

@@ -284,6 +284,75 @@ final class ClipHistoryTests: XCTestCase {
         XCTAssertEqual(dirPerms, 0o700)
     }
 
+    func testRichTextIsStoredAndAPlainRecopyClearsIt() {
+        var h = ClipHistory()
+        let rtf = Data("{\\rtf1 hi}".utf8)
+        h.record("Hello", rtf: rtf, now: t(1))
+        XCTAssertEqual(h.items[0].rtf, rtf)
+        XCTAssertNil(h.items[0].html)
+
+        h.record("Hello", html: "<p>Hello</p>", rtf: rtf, now: t(2))
+        XCTAssertEqual(h.items[0].html, "<p>Hello</p>")
+        XCTAssertNil(h.items[0].rtf, "HTML wins when both are present")
+
+        h.record("Hello", now: t(3))
+        XCTAssertNil(h.items[0].html)
+        XCTAssertNil(h.items[0].rtf)
+    }
+
+    func testSecretCopyDropsRichText() {
+        var h = ClipHistory()
+        h.record("hunter2!X", html: "<b>hunter2!X</b>", now: t(1))
+        h.record("hunter2!X", html: "<b>hunter2!X</b>", sensitive: true, expiresAt: t(60), now: t(2))
+        XCTAssertNil(h.items[0].html)
+        XCTAssertTrue(h.persistable().items.isEmpty)
+    }
+
+    func testRemoteUpdateKeepsLocalRichText() {
+        var h = ClipHistory()
+        let id = h.record("A", html: "<a href=\"https://example.com\">A</a>", now: t(1)).saved.first!
+        h.applyRemote(id: id, text: "A", createdAt: t(1), lastUsedAt: t(5))
+        XCTAssertEqual(h.item(id)?.html, "<a href=\"https://example.com\">A</a>")
+    }
+
+    func testStackPlaceAndReorderFollowPasteOrder() {
+        var h = ClipHistory()
+        h.record("A", now: t(1))
+        h.record("B", now: t(2))
+        h.record("C", now: t(3))
+        let a = h.items.first { $0.text == "A" }!.id
+        let c = h.items.first { $0.text == "C" }!.id
+        XCTAssertEqual(h.stackPlace(a, order: .firstInFirstOut), 1)
+        XCTAssertEqual(h.stackPlace(c, order: .lastInFirstOut), 1)
+
+        h.moveOnStack(c, sooner: true, order: .firstInFirstOut)
+        XCTAssertEqual(h.stack.map { h.item($0)?.text }, ["A", "C", "B"])
+        h.moveOnStack(a, sooner: true, order: .lastInFirstOut)
+        XCTAssertEqual(h.stack.map { h.item($0)?.text }, ["C", "A", "B"])
+    }
+
+    func testRemoveFromStackKeepsHistory() {
+        var h = ClipHistory()
+        h.record("A", now: t(1))
+        h.record("B", now: t(2))
+        let b = h.items.first { $0.text == "B" }!.id
+        h.removeFromStack(b)
+        XCTAssertEqual(h.items.map(\.text).sorted(), ["A", "B"])
+        XCTAssertEqual(h.stack.map { h.item($0)?.text }, ["A"])
+        XCTAssertNil(h.stackPlace(b, order: .firstInFirstOut))
+    }
+
+    func testFileRoundTripKeepsRichText() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = HistoryFile(url: dir.appendingPathComponent("history.json"))
+        var h = ClipHistory()
+        h.record("A", html: "<b>A</b>", now: t(1))
+        try file.save(h)
+        let loaded = try XCTUnwrap(file.load())
+        XCTAssertEqual(loaded.items.first?.html, "<b>A</b>")
+    }
+
     func testPreviewCollapsesWhitespaceAndMasksSecrets() {
         let item = ClipItem(text: "  hello\n\n  world\t!  ", createdAt: t0)
         XCTAssertEqual(item.preview(), "hello world !")

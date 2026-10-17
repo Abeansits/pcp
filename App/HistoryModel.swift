@@ -37,8 +37,8 @@ final class HistoryModel: ObservableObject {
 
     // MARK: Mutations
 
-    func record(_ text: String, sensitive: Bool, expiresAt: Date?) {
-        mutate { $0.record(text, sensitive: sensitive, expiresAt: expiresAt) }
+    func record(_ text: String, html: String?, rtf: Data?, sensitive: Bool, expiresAt: Date?) {
+        mutate { $0.record(text, html: html, rtf: rtf, sensitive: sensitive, expiresAt: expiresAt) }
     }
 
     func pop(order: PasteOrder) -> ClipItem? {
@@ -51,6 +51,10 @@ final class HistoryModel: ObservableObject {
     func delete(_ id: UUID) { mutate { $0.delete([id]) } }
     func removeAll() { mutate { $0.removeAll() } }
     func clearStack() { mutate { $0.clearStack(); return SyncDelta() } }
+    func removeFromStack(_ id: UUID) { mutate { $0.removeFromStack(id); return SyncDelta() } }
+    func moveOnStack(_ id: UUID, sooner: Bool, order: PasteOrder) {
+        mutate { $0.moveOnStack(id, sooner: sooner, order: order); return SyncDelta() }
+    }
     func setCapacity(_ capacity: Int) { mutate { $0.setCapacity(capacity) } }
 
     func applyRemote(id: UUID, text: String, createdAt: Date, lastUsedAt: Date) {

@@ -37,6 +37,10 @@ final class Preferences: ObservableObject {
     @Published var secretTTL: TimeInterval { didSet { defaults.set(secretTTL, forKey: Key.secretTTL) } }
     @Published var ignoredApps: [String] { didSet { defaults.set(ignoredApps, forKey: Key.ignoredApps) } }
     @Published var recordingPaused: Bool { didSet { defaults.set(recordingPaused, forKey: Key.recordingPaused) } }
+    @Published var historyShortcut: AppShortcut { didSet { store(historyShortcut, key: Key.historyShortcut) } }
+    @Published var pasteShortcut: AppShortcut { didSet { store(pasteShortcut, key: Key.pasteShortcut) } }
+    /// True while Settings is waiting for a new shortcut. Not saved.
+    @Published var isCapturingShortcut = false
     var didPromptForAccessibility: Bool {
         get { defaults.bool(forKey: Key.didPromptForAccessibility) }
         set { defaults.set(newValue, forKey: Key.didPromptForAccessibility) }
@@ -53,6 +57,20 @@ final class Preferences: ObservableObject {
         static let ignoredApps = "ignoredApps"
         static let recordingPaused = "recordingPaused"
         static let didPromptForAccessibility = "didPromptForAccessibility"
+        static let historyShortcut = "historyShortcut"
+        static let pasteShortcut = "pasteShortcut"
+    }
+
+    private func store(_ shortcut: AppShortcut, key: String) {
+        defaults.set(try? JSONEncoder().encode(shortcut), forKey: key)
+    }
+
+    private static func loadShortcut(_ key: String, from defaults: UserDefaults, fallback: AppShortcut) -> AppShortcut {
+        guard let data = defaults.data(forKey: key),
+              let shortcut = try? JSONDecoder().decode(AppShortcut.self, from: data),
+              !shortcut.key.isEmpty
+        else { return fallback }
+        return shortcut
     }
 
     private init() {
@@ -76,5 +94,7 @@ final class Preferences: ObservableObject {
         secretTTL = defaults.double(forKey: Key.secretTTL)
         ignoredApps = defaults.stringArray(forKey: Key.ignoredApps) ?? SecretDetector.defaultIgnoredApps
         recordingPaused = defaults.bool(forKey: Key.recordingPaused)
+        historyShortcut = Self.loadShortcut(Key.historyShortcut, from: defaults, fallback: .showHistory)
+        pasteShortcut = Self.loadShortcut(Key.pasteShortcut, from: defaults, fallback: .pasteNext)
     }
 }

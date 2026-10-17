@@ -1,6 +1,13 @@
 import AppKit
 import PCPCore
 
+/// One copy, as plain text plus whatever formatting the source put on the pasteboard.
+struct ClipboardCapture: Equatable {
+    var text: String
+    var html: String?
+    var rtf: Data?
+}
+
 /// Watches the general pasteboard. macOS has no change notification, so this
 /// polls `changeCount` (a cheap integer read) twice a second and only touches
 /// the contents when it changed.
@@ -9,7 +16,7 @@ final class PasteboardMonitor {
     /// Larger copies are skipped (iCloud records max out at 1 MB).
     static let maxBytes = 512 * 1024
 
-    var onCopy: ((_ text: String, _ sourceBundleID: String?) -> Void)?
+    var onCopy: ((_ capture: ClipboardCapture, _ sourceBundleID: String?) -> Void)?
 
     private let pasteboard = NSPasteboard.general
     private var lastChangeCount: Int
@@ -33,12 +40,21 @@ final class PasteboardMonitor {
         self.timer = timer
     }
 
-    /// Puts text on the pasteboard without it being recorded as a new copy.
-    /// Sensitive text is marked concealed so other clipboard tools skip it too.
-    func write(_ text: String, concealed: Bool) {
+    /// Puts an item back on the pasteboard without recording it as a new copy.
+    /// Formatting is included only when `rich` is set. Sensitive text is marked
+    /// concealed so other clipboard tools skip it too.
+    func write(_ item: ClipItem, rich: Bool) {
         pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-        if concealed {
+        pasteboard.setString(item.text, forType: .string)
+        if rich, !item.isSensitive {
+            if let html = item.html {
+                pasteboard.setString(html, forType: .html)
+            }
+            if let rtf = item.rtf {
+                pasteboard.setData(rtf, forType: .rtf)
+            }
+        }
+        if item.isSensitive {
             pasteboard.setData(Data(), forType: Self.concealedType)
         }
         lastChangeCount = pasteboard.changeCount
@@ -65,6 +81,15 @@ final class PasteboardMonitor {
               !text.allSatisfy(\.isWhitespace)
         else { return }
 
-        onCopy?(text, NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
+        var html = pasteboard.string(forType: .html)
+        if html?.utf8.count ?? 0 > Self.maxBytes { html = nil }
+        var rtf = pasteboard.data(forType: .rtf)
+        if rtf?.count ?? 0 > Self.maxBytes { rtf = nil }
+        if html != nil { rtf = nil }
+
+        onCopy?(
+            ClipboardCapture(text: text, html: html, rtf: rtf),
+            NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        )
     }
 }

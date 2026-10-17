@@ -15,13 +15,25 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Shortcuts") {
-                LabeledContent("Show history & search", value: "⇧⌘C")
-                LabeledContent("Paste & pop from stack", value: "⇧⌘V")
+                ShortcutField(title: "Show history & search", shortcut: $prefs.historyShortcut, reserved: prefs.pasteShortcut) {
+                    prefs.isCapturingShortcut = $0
+                }
+                ShortcutField(title: "Paste & pop from stack", shortcut: $prefs.pasteShortcut, reserved: prefs.historyShortcut) {
+                    prefs.isCapturingShortcut = $0
+                }
+                LabeledContent("Paste with style") {
+                    Text(prefs.pasteShortcut.addingOption() == prefs.pasteShortcut
+                         ? "⌥↩ in history"
+                         : prefs.pasteShortcut.addingOption().symbols)
+                }
                 LabeledContent("Pick item in history", value: "⌘1 … ⌘9, ↩")
+                Text("Click a shortcut, then type a new one. It needs ⌘, ⌥, or ⌃.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Pasting") {
-                Picker("⇧⌘V pastes", selection: $prefs.pasteOrder) {
+                Picker("\(prefs.pasteShortcut.symbols) pastes", selection: $prefs.pasteOrder) {
                     Text("In copy order (copy A B C → paste A B C)").tag(PasteOrder.firstInFirstOut)
                     Text("Newest first (copy A B C → paste C B A)").tag(PasteOrder.lastInFirstOut)
                 }
