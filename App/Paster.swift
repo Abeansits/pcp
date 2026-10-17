@@ -1,15 +1,22 @@
 import AppKit
-import ApplicationServices
+import CoreGraphics
 
-/// Sends ⌘V to the frontmost app. This is the one thing that needs the
-/// Accessibility permission.
+/// Sends ⌘V to the frontmost app.
+///
+/// That keystroke needs the PostEvent privilege (`CGPreflightPostEventAccess`).
+/// It appears in the same Settings list as Accessibility, called Device
+/// Control and Data Access on macOS 27. `AXIsProcessTrusted` is a different
+/// check: it stays false for an ad-hoc app after that list is already on,
+/// and prompting from it asks again on every paste.
 enum Paster {
-    static var isTrusted: Bool { AXIsProcessTrusted() }
+    private static var didRequestPostAccess = false
 
-    /// Shows the system prompt that leads to System Settings › Accessibility.
+    static var canPostEvents: Bool { CGPreflightPostEventAccess() }
+
+    /// Shows the system prompt that leads to System Settings.
     static func requestAccess() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
+        didRequestPostAccess = true
+        _ = CGRequestPostEventAccess()
     }
 
     static func openAccessibilitySettings() {
@@ -18,13 +25,13 @@ enum Paster {
         }
     }
 
-    /// Returns false (after prompting) if PCP isn't allowed to send keystrokes;
-    /// the text is still on the clipboard, so a manual ⌘V works.
+    /// The text is on the clipboard either way, so a manual ⌘V still works.
+    /// A missing grant prompts at most once per launch; the keystroke is
+    /// posted anyway, because macOS delivers it once that dialog is dismissed.
     @discardableResult
     static func paste() -> Bool {
-        guard isTrusted else {
+        if !canPostEvents, !didRequestPostAccess {
             requestAccess()
-            return false
         }
         let source = CGEventSource(stateID: .combinedSessionState)
         // Ignore the user's still-held ⇧ etc. while our keystroke goes through.
@@ -39,6 +46,6 @@ enum Paster {
         up?.flags = .maskCommand
         down?.post(tap: .cgSessionEventTap)
         up?.post(tap: .cgSessionEventTap)
-        return true
+        return canPostEvents
     }
 }

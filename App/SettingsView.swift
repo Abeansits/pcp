@@ -9,7 +9,7 @@ struct SettingsView: View {
     @ObservedObject var sync: CloudSync
     let onClearHistory: () -> Void
 
-    @State private var accessibilityGranted = Paster.isTrusted
+    @State private var accessibilityGranted = Paster.canPostEvents
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -28,7 +28,7 @@ struct SettingsView: View {
                 Toggle("Paste immediately when picking from history", isOn: $prefs.pasteOnSelect)
                 HStack {
                     Label(
-                        accessibilityGranted ? "Accessibility access granted" : "Accessibility access needed to paste",
+                        accessibilityGranted ? "Paste keystrokes allowed" : "Permission needed to paste keystrokes",
                         systemImage: accessibilityGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
                     )
                     .foregroundStyle(accessibilityGranted ? .green : .orange)
@@ -102,7 +102,7 @@ struct SettingsView: View {
         .frame(width: 520)
         .frame(minHeight: 560)
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
-            accessibilityGranted = Paster.isTrusted
+            accessibilityGranted = Paster.canPostEvents
         }
     }
 }

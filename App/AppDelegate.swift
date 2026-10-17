@@ -34,7 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.registerForRemoteNotifications() // lets iCloud push changes to us
         if prefs.syncEnabled { sync.start() }
 
-        if !Paster.isTrusted && !prefs.didPromptForAccessibility {
+        if !Paster.canPostEvents && !prefs.didPromptForAccessibility {
             prefs.didPromptForAccessibility = true
             Paster.requestAccess()
         }
