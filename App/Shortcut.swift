@@ -93,6 +93,9 @@ struct ShortcutField: View {
                 recording.toggle()
             }
             .buttonStyle(.bordered)
+            .tint(recording ? Color.accentColor : nil)
+            .font(recording ? .body : .body.monospaced())
+            .frame(minWidth: 148)
         }
         .onChange(of: recording) { _, isOn in
             onRecording(isOn)

@@ -11,22 +11,21 @@ final class FloatingPanel: NSPanel {
 
     init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 420),
-            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: 560, height: 480),
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: true
         )
         isFloatingPanel = true
         level = .floating
-        titleVisibility = .hidden
-        titlebarAppearsTransparent = true
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = true
         isMovableByWindowBackground = true
+        becomesKeyOnlyIfNeeded = false
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
-        for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
-            standardWindowButton(button)?.isHidden = true
-        }
     }
 
     override var canBecomeKey: Bool { true }
@@ -91,11 +90,16 @@ final class StackPanelController {
         self.prefs = prefs
         self.onPick = onPick
         viewModel = StackViewModel(model: model)
-        panel.contentView = NSHostingView(rootView: StackView(
+        let host = NSHostingView(rootView: StackView(
             viewModel: viewModel,
             prefs: prefs,
             onPick: { [weak self] index in self?.pick(index, rich: false) }
         ))
+        host.wantsLayer = true
+        host.layer?.backgroundColor = .clear
+        host.layer?.cornerRadius = 16
+        host.layer?.masksToBounds = true
+        panel.contentView = host
         panel.onResignKey = { [weak self] in self?.close() }
     }
 
@@ -230,35 +234,61 @@ struct StackView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("Search clipboard history", text: $viewModel.query)
-                    .textFieldStyle(.plain)
-                    .font(.title3)
-                    .focused($searchFocused)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-
-            Divider()
-
+            searchField
+            Divider().padding(.top, 10)
             if viewModel.results.isEmpty {
-                Spacer()
-                Text(viewModel.query.isEmpty ? "Nothing copied yet" : "No matches")
-                    .foregroundStyle(.secondary)
-                Spacer()
+                empty
             } else {
                 list
             }
-
             Divider()
             footer
         }
-        .frame(width: 560, height: 420)
-        .background(.regularMaterial)
+        .frame(width: 560, height: 480)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onAppear { searchFocused = true }
         .onChange(of: viewModel.focusRequest) { searchFocused = true }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Search clipboard history", text: $viewModel.query)
+                .textFieldStyle(.plain)
+                .font(.title3)
+                .focused($searchFocused)
+            if !viewModel.query.isEmpty {
+                Button {
+                    viewModel.query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Clear search")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.top, 14)
+    }
+
+    private var empty: some View {
+        Group {
+            if viewModel.query.isEmpty {
+                ContentUnavailableView {
+                    Label("Nothing copied yet", systemImage: "paperclip")
+                } description: {
+                    Text("Copies show up here.")
+                }
+            } else {
+                ContentUnavailableView.search(text: viewModel.query)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var list: some View {
@@ -290,21 +320,21 @@ struct StackView: View {
     }
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text("\(viewModel.results.count) items")
-                Spacer()
-                Text("↩ paste   ⌥↩ with style   ⌘1–9 pick   esc close")
+        HStack(spacing: 0) {
+            Text("\(viewModel.results.count) items")
+            if viewModel.query.isEmpty, viewModel.model.history.stack.count > 0 {
+                Text("  ·  \(viewModel.model.history.stack.count) waiting")
             }
-            HStack {
-                Spacer()
-                Text("⌥⌘↑↓ reorder stack   ⌥⌫ off stack   ⌘⌫ delete")
-            }
+            Spacer(minLength: 8)
+            Text("↩ paste  ·  ⌥↩ style  ·  ⌘1–9  ·  ⌥⌘↑↓  ·  ⌥⌫  ·  ⌘⌫  ·  esc")
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .font(.caption)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 14)
-        .padding(.vertical, 7)
+        .padding(.vertical, 8)
+        .help("⌥⌘↑↓ moves the selected item on the stack. ⌥⌫ takes it off the stack. ⌘⌫ deletes it from history.")
     }
 }
 
@@ -314,45 +344,72 @@ private struct Row: View {
     let isSelected: Bool
     let stackPlace: Int?
 
+    @State private var hovered = false
+
+    private var muted: Color {
+        isSelected ? Color.white.opacity(0.85) : Color.secondary
+    }
+
     var body: some View {
-        HStack(spacing: 8) {
-            Text(stackPlace.map(String.init) ?? "")
-                .font(.caption2.monospacedDigit())
-                .frame(width: 16, alignment: .trailing)
-                .foregroundStyle(isSelected ? .white.opacity(0.85) : .secondary)
-                .help(stackPlace == 1 ? "Pastes next" : (stackPlace == nil ? "" : "Stack position \(stackPlace!)"))
-            if item.hasRichText {
-                Image(systemName: "textformat")
-                    .font(.caption2)
-                    .foregroundStyle(isSelected ? .white.opacity(0.85) : .secondary)
-                    .help("Has formatting. ⌥↩ pastes it.")
-            }
-            if item.isSensitive {
-                Image(systemName: "lock.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Text(item.preview())
-                .lineLimit(1)
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            stackBadge
+            marker
+            Text(item.isSensitive ? item.preview() : item.text)
+                .lineLimit(2)
                 .truncationMode(.tail)
+                .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(Self.age(item.lastUsedAt))
                 .font(.caption)
-                .foregroundStyle(isSelected ? .white.opacity(0.8) : .secondary)
+                .foregroundStyle(muted)
                 .monospacedDigit()
             Text(index < 9 ? "⌘\(index + 1)" : "")
                 .font(.caption.monospaced())
-                .foregroundStyle(isSelected ? .white.opacity(0.8) : .secondary)
+                .foregroundStyle(muted)
                 .frame(width: 26, alignment: .trailing)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .foregroundStyle(isSelected ? .white : .primary)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.accentColor : .clear)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(isSelected ? Color.accentColor : (hovered ? Color.primary.opacity(0.06) : .clear))
         )
+        .onHover { hovered = $0 }
         .help(item.isSensitive ? "" : String(item.text.prefix(600)))
+    }
+
+    private var stackBadge: some View {
+        Text(stackPlace.map(String.init) ?? "")
+            .font(.caption2.monospacedDigit().weight(.semibold))
+            .foregroundStyle(muted)
+            .frame(width: 22, alignment: .center)
+            .padding(.vertical, 1)
+            .background {
+                if stackPlace != nil {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(isSelected ? Color.white.opacity(0.22) : Color.primary.opacity(0.08))
+                }
+            }
+            .help(stackPlace == 1 ? "Pastes next" : (stackPlace.map { "Stack position \($0)" } ?? ""))
+    }
+
+    /// Fixed slot so clip text lines up whether or not the row has an icon.
+    private var marker: some View {
+        Group {
+            if item.isSensitive {
+                Image(systemName: "lock.fill")
+                    .help("Kept in memory only")
+            } else if item.hasRichText {
+                Image(systemName: "textformat")
+                    .help("Has formatting. ⌥↩ pastes it.")
+            } else {
+                Color.clear
+            }
+        }
+        .font(.caption2)
+        .foregroundStyle(muted)
+        .frame(width: 14, alignment: .center)
     }
 
     static func age(_ date: Date) -> String {

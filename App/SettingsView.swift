@@ -23,8 +23,9 @@ struct SettingsView: View {
                 }
                 LabeledContent("Paste with style") {
                     Text(prefs.pasteShortcut.addingOption() == prefs.pasteShortcut
-                         ? "⌥↩ in history"
+                         ? "⌥↩ in the history panel"
                          : prefs.pasteShortcut.addingOption().symbols)
+                        .foregroundStyle(.secondary)
                 }
                 LabeledContent("Pick item in history", value: "⌘1 … ⌘9, ↩")
                 Text("Click a shortcut, then type a new one. It needs ⌘, ⌥, or ⌃.")
@@ -34,19 +35,23 @@ struct SettingsView: View {
 
             Section("Pasting") {
                 Picker("\(prefs.pasteShortcut.symbols) pastes", selection: $prefs.pasteOrder) {
-                    Text("In copy order (copy A B C → paste A B C)").tag(PasteOrder.firstInFirstOut)
-                    Text("Newest first (copy A B C → paste C B A)").tag(PasteOrder.lastInFirstOut)
+                    Text("Oldest first").tag(PasteOrder.firstInFirstOut)
+                    Text("Newest first").tag(PasteOrder.lastInFirstOut)
                 }
+                Text(prefs.pasteOrder == .firstInFirstOut
+                     ? "Copy A, B, C, then paste A, B, C."
+                     : "Copy A, B, C, then paste C, B, A.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Toggle("Paste immediately when picking from history", isOn: $prefs.pasteOnSelect)
-                HStack {
-                    Label(
-                        accessibilityGranted ? "Paste keystrokes allowed" : "Permission needed to paste keystrokes",
-                        systemImage: accessibilityGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
-                    )
-                    .foregroundStyle(accessibilityGranted ? .green : .orange)
-                    Spacer()
-                    if !accessibilityGranted {
-                        Button("Open Settings…") { Paster.openAccessibilitySettings() }
+                LabeledContent("Paste keystrokes") {
+                    HStack(spacing: 6) {
+                        Image(systemName: accessibilityGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(accessibilityGranted ? .green : .orange)
+                        Text(accessibilityGranted ? "Allowed" : "Needs permission")
+                        if !accessibilityGranted {
+                            Button("Open Settings…") { Paster.openAccessibilitySettings() }
+                        }
                     }
                 }
             }
@@ -97,7 +102,7 @@ struct SettingsView: View {
                 }
             }
 
-            Section {
+            Section("General") {
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in
                         do {
@@ -111,8 +116,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520)
-        .frame(minHeight: 560)
+        .frame(width: 520, height: 640)
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             accessibilityGranted = Paster.canPostEvents
         }
@@ -127,18 +131,26 @@ private struct IgnoredAppsEditor: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Never record copies from")
             List(bundleIDs, id: \.self, selection: $selection) { id in
-                Text(Self.displayName(for: id))
+                let name = Self.displayName(for: id)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                    if name != id {
+                        Text(id)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
-            .frame(height: 110)
-            HStack(spacing: 4) {
-                Button { addApp() } label: { Image(systemName: "plus") }
-                Button {
+            .frame(height: 132)
+            HStack(spacing: 8) {
+                Button("Add App…", action: addApp)
+                Button("Remove") {
                     if let selection { bundleIDs.removeAll { $0 == selection } }
                     selection = nil
-                } label: { Image(systemName: "minus") }
+                }
                 .disabled(selection == nil)
             }
-            .buttonStyle(.borderless)
+            .controlSize(.small)
         }
     }
 
