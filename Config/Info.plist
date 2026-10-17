@@ -27,7 +27,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>PCP – Personal Copy Paste</string>
+	<string>Copyright © 2026 Sebastian Nystorm</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

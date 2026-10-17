@@ -14,6 +14,9 @@ jobs:
       - name: Generate Xcode project
         run: brew install xcodegen && xcodegen generate
       - name: Build app (unsigned)
+        # CloudKit entitlements need a provisioning profile, so this build
+        # leaves them out. iCloud stays off.
         run: |
           xcodebuild -project PCP.xcodeproj -scheme PCP -configuration Debug \
-            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_ENTITLEMENTS= build

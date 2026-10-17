@@ -26,9 +26,9 @@ The menu bar paperclip shows how many items are waiting on the stack.
 
 Requirements: macOS 14+, Xcode 16+, [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
 
-iCloud sync needs a **paid** Apple Developer Program membership. A free Apple ID cannot create an iCloud container. Its Personal Team profiles also expire after 7 days, and every re-sign asks for Accessibility again. For one Mac and no sync, use the ad-hoc install.
+iCloud sync needs a **paid** Apple Developer Program membership. A free Apple ID cannot create an iCloud container. Its Personal Team profiles also expire after 7 days, and every re-sign asks for the paste permission again. For one Mac and no sync, use the ad-hoc install.
 
-### This Mac, no iCloud
+### Without iCloud
 
 ```sh
 make install
@@ -36,7 +36,9 @@ make install
 
 That builds a Release app with the CloudKit entitlement left out, ad-hoc signs it, and copies it to `~/Applications/PCP.app`. Pass `PREFIX=/Applications` if that directory is writable. Quit the running copy from the menu bar first, so the last clipboard changes are flushed, then open the installed app. Turn on **Launch at login** in its Settings only after it lives in that folder. The registration points at that path.
 
-History is `~/Library/Application Support/PCP/history.json`. The path does not include the bundle id, so a later signed build reads the same clips. Preferences follow the bundle id. Each `make install` is a new ad-hoc signature, so macOS asks for Accessibility again and the login item may need to be allowed again. If paste stops, remove PCP from the Accessibility list and add it back. Run one copy. A second copy writes the same file, and the last save wins.
+History is `~/Library/Application Support/PCP/history.json`. The path does not include the bundle id, so a later signed build reads the same clips. Preferences follow the bundle id. The ad-hoc app uses the placeholder id `com.example.pcp` until you set one in `Config/Local.xcconfig`.
+
+Each `make install` is a new ad-hoc signature, so macOS asks for permission to send keystrokes again, and the login item may need to be allowed again. That permission is in the same Privacy & Security list as Accessibility. On macOS 27 the list is named Device Control and Data Access. If paste keeps asking, remove the old PCP row and allow the current app. Run one copy. A second copy writes the same file, and the last save wins.
 
 ### iCloud sync
 
@@ -49,7 +51,7 @@ In Xcode, select the **PCP** target, then **Signing & Capabilities**. Check that
 
 On first launch:
 
-1. **Accessibility.** macOS asks to let PCP control your computer. PCP needs this to send ⌘V into the app you're in. Without it, items are still put on the clipboard and you press ⌘V yourself. Rebuilding with a different signature can reset this permission. If pasting stops working, remove PCP from the list and add it back.
+1. **Paste keystrokes.** macOS asks to let PCP control this Mac and access your data. PCP needs that to send ⌘V into the app you're in. Without it, the text is still put on the clipboard and you press ⌘V yourself. The switch lives under Privacy & Security, in the same list as Accessibility (named Device Control and Data Access on macOS 27). A new signature can reset it. If pasting stops, remove the old PCP row and allow the current app.
 2. If macOS asks whether PCP may read the clipboard, choose **Allow**. Reading the clipboard is what PCP does.
 3. Optional: enable **Launch at login** in Settings.
 
@@ -83,3 +85,7 @@ How sync converges: each clip is a CloudKit record with a random UUID. If two Ma
 - Clips over 512 KB are skipped.
 - Universal Clipboard (Handoff) arrivals aren't recorded, because reading them blocks while they download. Copies made on your other PCP Macs arrive through iCloud instead.
 - PCP takes ⇧⌘C and ⇧⌘V system-wide, which overrides "Paste and Match Style" and similar shortcuts in other apps.
+
+## License
+
+[MIT](LICENSE)
