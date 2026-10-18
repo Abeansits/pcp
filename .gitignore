@@ -6,3 +6,4 @@ Core/.swiftpm/
 xcuserdata/
 DerivedData/
 Config/Local.xcconfig
+/output/
