@@ -1,10 +1,10 @@
 import AppKit
 import Carbon.HIToolbox
 import Combine
-import PCPCore
+import PEACore
 import SwiftUI
 
-/// A Spotlight-style panel that takes keyboard focus without activating PCP,
+/// A Spotlight-style panel that takes keyboard focus without activating PEA,
 /// so the app you were in stays frontmost and receives the paste.
 final class FloatingPanel: NSPanel {
     var onResignKey: (() -> Void)?

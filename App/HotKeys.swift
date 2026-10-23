@@ -15,7 +15,7 @@ final class HotKeyCenter {
     private var entries: [UInt32: Entry] = [:]
     private var nextID: UInt32 = 1
     private var handler: EventHandlerRef?
-    private static let signature: OSType = 0x5043_5021 // 'PCP!'
+    private static let signature: OSType = 0x5045_4121 // 'PEA!'
 
     init() {
         var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))

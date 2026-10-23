@@ -1,5 +1,5 @@
 import AppKit
-import PCPCore
+import PEACore
 import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers

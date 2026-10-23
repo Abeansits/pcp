@@ -1,5 +1,5 @@
 import XCTest
-@testable import PCPCore
+@testable import PEACore
 
 final class SecretDetectorTests: XCTestCase {
     func testFlagsPasswordsAndTokens() {

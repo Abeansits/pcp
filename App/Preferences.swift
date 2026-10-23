@@ -1,5 +1,5 @@
 import Foundation
-import PCPCore
+import PEACore
 
 enum SecretHandling: String, CaseIterable, Identifiable {
     /// Keep in memory for `secretTTL` seconds; never written to disk or synced.

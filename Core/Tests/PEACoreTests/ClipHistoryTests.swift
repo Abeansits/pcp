@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import PCPCore
+@testable import PEACore
 
 final class ClipHistoryTests: XCTestCase {
     private let t0 = Date(timeIntervalSince1970: 1_000_000)

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Creates a stable local code-signing identity named "PCP Local".
+# Creates a stable local code-signing identity named "PEA Local".
 # Ad-hoc signatures change every build, so macOS asks for the paste
 # permission again. This certificate does not.
 #
@@ -8,9 +8,9 @@
 # secret: the private key never leaves this Mac, and it can only sign.
 set -euo pipefail
 
-NAME="${PCP_SIGN_ID:-PCP Local}"
-KEYCHAIN="${HOME}/Library/Keychains/pcp-signing.keychain-db"
-KEYCHAIN_PASSWORD="pcp-local"
+NAME="${PEA_SIGN_ID:-PEA Local}"
+KEYCHAIN="${HOME}/Library/Keychains/pea-signing.keychain-db"
+KEYCHAIN_PASSWORD="pea-local"
 
 add_to_search_list() {
     local current

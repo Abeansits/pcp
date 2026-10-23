@@ -1,5 +1,5 @@
 import AppKit
-import PCPCore
+import PEACore
 
 /// One copy, as plain text plus whatever formatting the source put on the pasteboard.
 struct ClipboardCapture: Equatable {
@@ -71,7 +71,7 @@ final class PasteboardMonitor {
         guard let types = pasteboard.types?.map(\.rawValue), !types.isEmpty else { return }
         if SecretDetector.shouldIgnore(pasteboardTypes: types) { return }
         // Universal Clipboard from another device: reading it would block while
-        // it downloads; synced PCP devices deliver their copies via iCloud anyway.
+        // it downloads; synced PEA devices deliver their copies via iCloud anyway.
         if types.contains(Self.remoteClipboardType) { return }
         // Files copied in Finder: their "text" is just a file name.
         if types.contains(NSPasteboard.PasteboardType.fileURL.rawValue) { return }

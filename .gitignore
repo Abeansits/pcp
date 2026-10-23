@@ -1,6 +1,6 @@
 .DS_Store
 /build/
-/PCP.xcodeproj/
+/PEA.xcodeproj/
 Core/.build/
 Core/.swiftpm/
 xcuserdata/

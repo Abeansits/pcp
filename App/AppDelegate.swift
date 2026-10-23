@@ -1,7 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 import Combine
-import PCPCore
+import PEACore
 import SwiftUI
 
 @MainActor
@@ -135,7 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if settingsWindow == nil {
             let view = SettingsView(prefs: prefs, sync: sync) { [weak self] in self?.confirmClearHistory() }
             let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-            window.title = "PCP Settings"
+            window.title = "PEA Settings"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
             window.center()
@@ -149,7 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func setUpStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = NSImage(systemSymbolName: "paperclip", accessibilityDescription: "PCP")
+        item.button?.image = NSImage(systemSymbolName: "paperclip", accessibilityDescription: "PEA")
         item.button?.imagePosition = .imageLeading
         let menu = NSMenu()
         menu.delegate = self
@@ -217,7 +217,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ","))
-        menu.addItem(NSMenuItem(title: "Quit PCP", action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit PEA", action: #selector(quit), keyEquivalent: "q"))
 
         for item in menu.items where item.action != nil { item.target = self }
     }
