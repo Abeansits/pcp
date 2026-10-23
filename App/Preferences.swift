@@ -39,6 +39,7 @@ final class Preferences: ObservableObject {
     @Published var recordingPaused: Bool { didSet { defaults.set(recordingPaused, forKey: Key.recordingPaused) } }
     @Published var historyShortcut: AppShortcut { didSet { store(historyShortcut, key: Key.historyShortcut) } }
     @Published var pasteShortcut: AppShortcut { didSet { store(pasteShortcut, key: Key.pasteShortcut) } }
+    @Published var windowShortcutsEnabled: Bool { didSet { defaults.set(windowShortcutsEnabled, forKey: Key.windowShortcutsEnabled) } }
     /// True while Settings is waiting for a new shortcut. Not saved.
     @Published var isCapturingShortcut = false
     var didPromptForAccessibility: Bool {
@@ -59,6 +60,7 @@ final class Preferences: ObservableObject {
         static let didPromptForAccessibility = "didPromptForAccessibility"
         static let historyShortcut = "historyShortcut"
         static let pasteShortcut = "pasteShortcut"
+        static let windowShortcutsEnabled = "windowShortcutsEnabled"
     }
 
     private func store(_ shortcut: AppShortcut, key: String) {
@@ -84,6 +86,7 @@ final class Preferences: ObservableObject {
             Key.secretTTL: 60.0,
             Key.ignoredApps: SecretDetector.defaultIgnoredApps,
             Key.recordingPaused: false,
+            Key.windowShortcutsEnabled: true,
         ])
         historyLimit = defaults.integer(forKey: Key.historyLimit)
         pasteOrder = PasteOrder(rawValue: defaults.string(forKey: Key.pasteOrder) ?? "") ?? .firstInFirstOut
@@ -96,5 +99,6 @@ final class Preferences: ObservableObject {
         recordingPaused = defaults.bool(forKey: Key.recordingPaused)
         historyShortcut = Self.loadShortcut(Key.historyShortcut, from: defaults, fallback: .showHistory)
         pasteShortcut = Self.loadShortcut(Key.pasteShortcut, from: defaults, fallback: .pasteNext)
+        windowShortcutsEnabled = defaults.bool(forKey: Key.windowShortcutsEnabled)
     }
 }

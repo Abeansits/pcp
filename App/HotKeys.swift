@@ -1,12 +1,20 @@
 import AppKit
 import Carbon.HIToolbox
 
+/// The key of a global shortcut.
+enum HotKey: Equatable {
+    /// Found in the current keyboard layout, so it follows Dvorak, AZERTY etc.
+    case character(Character)
+    /// A key that doesn't move between layouts: an arrow, ↩, ⌫ (`kVK_…`).
+    case code(Int)
+}
+
 /// System-wide shortcuts via Carbon's RegisterEventHotKey: no Accessibility
 /// permission needed, no third-party dependency, stable for 20+ years.
 @MainActor
 final class HotKeyCenter {
     private struct Entry {
-        let character: Character
+        let key: HotKey
         let modifiers: UInt32
         let action: () -> Void
         var ref: EventHotKeyRef?
@@ -44,17 +52,29 @@ final class HotKeyCenter {
     /// Registers ⌘⇧`character` etc. Returns false if another app already owns it.
     @discardableResult
     func register(_ character: Character, modifiers: UInt32, action: @escaping () -> Void) -> Bool {
+        register(.character(character), modifiers: modifiers, action: action)
+    }
+
+    @discardableResult
+    func register(_ key: HotKey, modifiers: UInt32, action: @escaping () -> Void) -> Bool {
         let id = nextID
         nextID += 1
-        entries[id] = Entry(character: character, modifiers: modifiers, action: action)
+        entries[id] = Entry(key: key, modifiers: modifiers, action: action)
         return install(id)
     }
 
     private func install(_ id: UInt32) -> Bool {
         guard var entry = entries[id] else { return false }
-        guard let keyCode = KeyboardLayout.keyCode(for: entry.character) ?? KeyboardLayout.ansiKeyCode(for: entry.character) else {
-            Log.app.error("No key code for shortcut \(String(entry.character), privacy: .public)")
-            return false
+        let keyCode: CGKeyCode
+        switch entry.key {
+        case .code(let code):
+            keyCode = CGKeyCode(code)
+        case .character(let character):
+            guard let code = KeyboardLayout.keyCode(for: character) ?? KeyboardLayout.ansiKeyCode(for: character) else {
+                Log.app.error("No key code for shortcut \(String(character), privacy: .public)")
+                return false
+            }
+            keyCode = code
         }
         var ref: EventHotKeyRef?
         let status = RegisterEventHotKey(
@@ -64,7 +84,7 @@ final class HotKeyCenter {
         entry.ref = ref
         entries[id] = entry
         if status != noErr {
-            Log.app.error("Could not register shortcut for \(String(entry.character), privacy: .public): \(status)")
+            Log.app.error("Could not register shortcut for key \(keyCode): \(status)")
         }
         return status == noErr
     }

@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     private let monitor = PasteboardMonitor()
     private let hotKeys = HotKeyCenter()
+    private let windows = WindowManager()
     private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
     private var cancellables: Set<AnyCancellable> = []
@@ -103,6 +104,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.pasteAndPop(rich: true)
             }
         }
+        // Registered after the clipboard's, so a clipboard shortcut set to
+        // the same keys keeps working.
+        guard prefs.windowShortcutsEnabled else { return }
+        for shortcut in WindowShortcut.all {
+            hotKeys.register(shortcut.key, modifiers: shortcut.carbonModifiers) { [weak self] in
+                self?.windows.perform(shortcut.action)
+            }
+        }
     }
 
     @objc private func showHistory() { panel.show() }
@@ -112,6 +121,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc private func pasteNextStyled() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in self?.pasteAndPop(rich: true) }
+    }
+    @objc private func moveWindow(_ sender: NSMenuItem) {
+        guard let action = (sender.representedObject as? String).flatMap(WindowAction.init(rawValue:)) else { return }
+        windows.perform(action)
     }
     @objc private func togglePause() { prefs.recordingPaused.toggle() }
     @objc private func clearStack() { model.clearStack() }
@@ -133,13 +146,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func showSettings() {
         if settingsWindow == nil {
-            let view = SettingsView(prefs: prefs, sync: sync) { [weak self] in self?.confirmClearHistory() }
-            let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-            window.title = "PEA Settings"
-            window.styleMask = [.titled, .closable]
-            window.isReleasedWhenClosed = false
-            window.center()
-            settingsWindow = window
+            settingsWindow = SettingsWindow.make(prefs: prefs, sync: sync) { [weak self] in
+                self?.confirmClearHistory()
+            }
         }
         NSApp.activate()
         settingsWindow?.makeKeyAndOrderFront(nil)
@@ -216,10 +225,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(NSMenuItem(title: "Clear History…", action: #selector(confirmClearHistory), keyEquivalent: ""))
 
         menu.addItem(.separator())
+        let windowItem = NSMenuItem(title: "Move Window", action: nil, keyEquivalent: "")
+        windowItem.submenu = windowMenu()
+        menu.addItem(windowItem)
+
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: "Quit PEA", action: #selector(quit), keyEquivalent: "q"))
 
         for item in menu.items where item.action != nil { item.target = self }
+    }
+
+    /// The window actions, acting on the app you were in (opening a menu bar
+    /// menu doesn't take focus from it).
+    private func windowMenu() -> NSMenu {
+        let menu = NSMenu()
+        for (index, group) in WindowShortcut.groups.enumerated() {
+            if index > 0 { menu.addItem(.separator()) }
+            for shortcut in group.shortcuts {
+                let item = NSMenuItem(
+                    title: shortcut.action.title, action: #selector(moveWindow(_:)),
+                    keyEquivalent: prefs.windowShortcutsEnabled ? shortcut.keyEquivalent : ""
+                )
+                item.keyEquivalentModifierMask = shortcut.modifierFlags
+                item.representedObject = shortcut.action.rawValue
+                item.target = self
+                menu.addItem(item)
+            }
+        }
+        return menu
     }
 
     // MARK: Preferences
@@ -258,11 +292,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
 
-        Publishers.Merge3(
+        Publishers.Merge4(
             prefs.$historyShortcut.dropFirst().map { _ in () },
             prefs.$pasteShortcut.dropFirst().map { _ in () },
-            prefs.$isCapturingShortcut.dropFirst().map { _ in () }
+            prefs.$isCapturingShortcut.dropFirst().map { _ in () },
+            prefs.$windowShortcutsEnabled.dropFirst().map { _ in () }
         )
+        // @Published fires before the new value is stored; read it on the next turn.
+        .receive(on: RunLoop.main)
         .sink { [weak self] in self?.bindHotKeys() }
         .store(in: &cancellables)
     }

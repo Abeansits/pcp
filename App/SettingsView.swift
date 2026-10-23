@@ -4,13 +4,42 @@ import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct SettingsView: View {
+/// Settings, one toolbar tab per tool.
+@MainActor
+enum SettingsWindow {
+    static func make(prefs: Preferences, sync: CloudSync, onClearHistory: @escaping () -> Void) -> NSWindow {
+        let tabs = NSTabViewController()
+        tabs.tabStyle = .toolbar
+        tabs.addTabViewItem(tab("Clipboard", symbol: "doc.on.clipboard",
+                                ClipboardSettingsView(prefs: prefs, sync: sync, onClearHistory: onClearHistory)))
+        tabs.addTabViewItem(tab("Windows", symbol: "rectangle.split.2x1", WindowSettingsView(prefs: prefs)))
+        tabs.addTabViewItem(tab("General", symbol: "gearshape", GeneralSettingsView()))
+
+        let window = NSWindow(contentViewController: tabs)
+        window.styleMask = [.titled, .closable]
+        window.toolbarStyle = .preference
+        window.isReleasedWhenClosed = false
+        window.center()
+        return window
+    }
+
+    private static func tab(_ label: String, symbol: String, _ view: some View) -> NSTabViewItem {
+        let host = NSHostingController(rootView: view)
+        // The window takes each tab's size when you switch to it.
+        host.sizingOptions = .preferredContentSize
+        let item = NSTabViewItem(viewController: host)
+        item.label = label
+        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
+        return item
+    }
+}
+
+struct ClipboardSettingsView: View {
     @ObservedObject var prefs: Preferences
     @ObservedObject var sync: CloudSync
     let onClearHistory: () -> Void
 
     @State private var accessibilityGranted = Paster.canPostEvents
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
         Form {
@@ -101,8 +130,25 @@ struct SettingsView: View {
                     }
                 }
             }
+        }
+        .formStyle(.grouped)
+        .frame(width: 520, height: 640)
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            accessibilityGranted = Paster.canPostEvents
+        }
+    }
+}
 
-            Section("General") {
+struct GeneralSettingsView: View {
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+
+    private var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+    }
+
+    var body: some View {
+        Form {
+            Section {
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in
                         do {
@@ -113,13 +159,17 @@ struct SettingsView: View {
                             launchAtLogin = SMAppService.mainApp.status == .enabled
                         }
                     }
+            } footer: {
+                Text("Turn this on after PEA is in its final folder. The login item points at that path.")
+                    .foregroundStyle(.secondary)
+            }
+            Section("About") {
+                LabeledContent("PEA", value: "Personal Everything App")
+                LabeledContent("Version", value: version)
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 640)
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
-            accessibilityGranted = Paster.canPostEvents
-        }
+        .frame(width: 520, height: 260)
     }
 }
 

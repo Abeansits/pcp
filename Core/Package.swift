@@ -2,7 +2,8 @@
 import PackageDescription
 
 // Platform-independent logic for PEA (history, paste stack, secret detection,
-// search). Kept free of AppKit/CloudKit so it can be unit-tested anywhere.
+// search, window layout). Kept free of AppKit/CloudKit so it can be
+// unit-tested anywhere.
 let package = Package(
     name: "PEACore",
     platforms: [.macOS(.v14)],
