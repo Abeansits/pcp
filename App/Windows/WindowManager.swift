@@ -84,10 +84,12 @@ private struct AXWindow {
               running.processIdentifier != ProcessInfo.processInfo.processIdentifier
         else { return nil }
         let app = AXUIElementCreateApplication(running.processIdentifier)
-        // A hung app shouldn't freeze PEA for the default 6 seconds.
+        // A hung app shouldn't freeze PEA for the default 6 seconds. The
+        // timeout is per element, so the window gets it too.
         AXUIElementSetMessagingTimeout(app, 1)
         let candidate = copyElement(app, kAXFocusedWindowAttribute) ?? copyElement(app, kAXMainWindowAttribute)
         guard let candidate else { return nil }
+        AXUIElementSetMessagingTimeout(candidate, 1)
         let window = AXWindow(element: candidate, app: app)
         guard !window.isFullScreen, window.isSettable(kAXPositionAttribute) else { return nil }
         return window
