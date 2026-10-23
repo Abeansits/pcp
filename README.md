@@ -1,6 +1,14 @@
 # PEA – Personal Everything App
 
-A small, private clipboard manager for macOS. It lives in the menu bar, keeps a searchable clipboard history, adds a copy/paste **stack**, and syncs through **your own iCloud**. It has no analytics, no accounts, no in-app purchases and no third-party dependencies.
+Small, private Mac tools in one menu bar app. No analytics, no accounts, no in-app purchases and no third-party dependencies.
+
+- **[Clipboard](#clipboard)**: searchable history, a copy/paste **stack**, and sync through **your own iCloud**.
+- **[Windows](#windows)**: Magnet's shortcuts for snapping the focused window to halves, quarters and thirds.
+- Next: text actions on a selection, like PopClip. See the [roadmap](docs/ROADMAP.md).
+
+PEA used to be PCP, the clipboard manager alone. See [Coming from PCP](#coming-from-pcp).
+
+## Clipboard
 
 | Shortcut | What it does |
 |---|---|
@@ -11,7 +19,7 @@ A small, private clipboard manager for macOS. It lives in the menu bar, keeps a 
 
 ⇧⌘C and ⇧⌘V are the defaults. Change them in Settings. The menu bar paperclip shows how many items are waiting, and its tooltip names the one ⇧⌘V will paste.
 
-## Features
+### Features
 
 - **Stack paste.** ⇧⌘V pastes in copy order (copy A B C → paste A B C); Settings can switch it to newest-first (C B A). Popping removes an item from the stack, not from history. Copying after a 15-minute pause starts a fresh stack, so ⇧⌘V never digs up something you copied hours ago. History numbers the stack in paste order. ⌥⌘↑↓ moves the selected item, ⌥⌫ takes it off the stack without deleting it, and picking one item pastes that item only.
 - **History**: up to 1000 items by default, deduplicated (copying the same text again moves it to the top), searchable (every word must match, case- and accent-insensitive). You can also have items forgotten after a day, week, 30 or 90 days.
@@ -23,6 +31,25 @@ A small, private clipboard manager for macOS. It lives in the menu bar, keeps a 
 - **Links and styled text.** When a copy includes HTML or RTF, PEA keeps it. ⇧⌘V still pastes plain text. ⌥⇧⌘V, or ⌥↩ in history, pastes the formatting too. Images and files are still ignored.
 - **Light on resources.** It checks the pasteboard's change counter twice a second (an integer read) and only reads contents when something changed. Global shortcuts use Carbon `RegisterEventHotKey`, which is stable, needs no permission and doesn't install a keyboard tap.
 - **Few moving parts.** Only public, long-stable APIs: `NSPasteboard`, Carbon hot keys, `CGEvent`, and `CKSyncEngine`. History is a JSON file written atomically (`~/Library/Application Support/PEA/history.json`, mode 600, directory mode 700).
+
+## Windows
+
+Magnet's default shortcuts. They act on the focused window of the frontmost app.
+
+| Shortcut | Puts the window |
+|---|---|
+| **⌃⌥← → ↑ ↓** | in the left, right, top or bottom half |
+| **⌃⌥U I J K** | in the top-left, top-right, bottom-left or bottom-right quarter |
+| **⌃⌥D F G** | in the left, center or right third |
+| **⌃⌥E T** | in the left or right two thirds |
+| **⌃⌥↩** | over the whole screen (not macOS full screen) |
+| **⌃⌥C** | in the center, same size |
+| **⌃⌥⌫** | back where it was before the first snap |
+| **⌃⌥⌘← →** | on the previous or next display; a half stays a half |
+
+The same actions are in the menu bar under **Move Window**, which works even with the shortcuts switched off in Settings → Windows. Layouts leave the menu bar and Dock uncovered, and halves and thirds meet without gaps. A window that can't shrink far enough (System Settings, for one) stays as close as it can without leaving the screen.
+
+Moving another app's windows needs the **Accessibility** permission. PEA asks the first time you use a window shortcut. Settings → Windows shows whether it's allowed. The full behavior is in the [spec](docs/specs/windows.md).
 
 ## Coming from PCP
 
@@ -71,7 +98,8 @@ On first launch:
 
 1. **Paste keystrokes.** macOS asks to let PEA control this Mac and access your data. PEA needs that to send ⌘V into the app you're in. Without it, the text is still put on the clipboard and you press ⌘V yourself. The switch lives under Privacy & Security, in the same list as Accessibility (named Device Control and Data Access on macOS 27). A new signature can reset it. If pasting stops, remove the old PEA row and allow the current app.
 2. If macOS asks whether PEA may read the clipboard, choose **Allow**. Reading the clipboard is what PEA does.
-3. Optional: enable **Launch at login** in Settings.
+3. **Accessibility**, the first time you use a window shortcut. Window snapping needs it to move other apps' windows. It's a separate switch from paste keystrokes, in the same list.
+4. Optional: enable **Launch at login** in Settings → General.
 
 ### Putting it on your other Macs
 
@@ -91,28 +119,35 @@ make release NOTES="…"  # zip that app and publish a GitHub release
 Layout:
 
 ```
-Core/      PEACore Swift package: history, stack, dedupe/merge, secret detection, search, persistence (pure Foundation, tested)
-App/       macOS app: menu bar, pasteboard monitor, hot keys, paste injection, history panel, settings, CloudKit sync
-Config/    Info.plist, entitlements, signing xcconfig
+Core/           PEACore Swift package: history, stack, dedupe/merge, secret detection, search,
+                persistence, window layout geometry (pure Foundation, tested)
+App/            menu bar, hot keys, settings window
+App/Clipboard/  pasteboard monitor, paste injection, history panel, CloudKit sync
+App/Windows/    Accessibility window mover, window shortcuts, Windows settings tab
+Config/         Info.plist, entitlements, signing xcconfig
+docs/           roadmap and per-tool specs
 ```
 
 How sync converges: each clip is a CloudKit record with a random UUID. If two Macs record the same text independently, both keep the record with the smaller UUID and delete the other, so they end up identical without coordinating. For timestamps, the newest one wins. Deletions and the history limit propagate to every device, so the smallest limit you set on any Mac applies to all of them.
 
 ## Known limits
 
+Clipboard:
+
 - Images and files aren't recorded. Styled text is kept and pasted only when you ask (⌥⇧⌘V or ⌥↩).
 - Clips over 512 KB are skipped. Formatting larger than that is dropped, and the plain text is kept.
 - Universal Clipboard (Handoff) arrivals aren't recorded, because reading them blocks while they download. Copies made on your other PEA Macs arrive through iCloud instead.
 - The default shortcuts are ⇧⌘C and ⇧⌘V, which override "Paste and Match Style" and similar shortcuts in other apps. Change them in Settings.
 
+Windows:
+
+- The shortcuts are fixed for now; you can only switch them all off. They take ⌃⌥ + those keys from every app.
+- No dragging to a screen edge to snap yet, and windows in macOS full screen are left alone.
+- PEA's own windows (Settings) can't be snapped.
+
 ## Roadmap
 
-Ranked by how much they help the copy-then-paste loop, then by what blocks another person from running PEA. Nothing here is scheduled.
-
-1. **Sync without CloudKit.** CloudKit needs a paid Apple Developer membership. An optional encrypted copy of the history file in a folder you pick (iCloud Drive, or any synced folder) would cover a free account.
-2. **Pin a few clips** so the history limit and "forget after" cannot drop them.
-
-Left alone on purpose: recording Universal Clipboard, image and file history, snippet expansion, and any sync server that is not yours.
+Per tool, in [docs/ROADMAP.md](docs/ROADMAP.md). Specs for each tool are in [docs/specs](docs/specs).
 
 ## License
 
