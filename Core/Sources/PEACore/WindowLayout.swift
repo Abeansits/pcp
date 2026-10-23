@@ -1,4 +1,8 @@
 import Foundation
+#if canImport(CoreGraphics)
+// On macOS, CGRect's members and Equatable come from here. Linux Foundation has them.
+import CoreGraphics
+#endif
 
 /// Something a window shortcut does to the focused window.
 public enum WindowAction: String, CaseIterable, Codable, Sendable {
