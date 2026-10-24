@@ -1,5 +1,5 @@
 import Foundation
-import PCPCore
+import PEACore
 
 /// Owns the in-memory history, saves it to disk (debounced), expires old and
 /// sensitive items, and reports cloud-relevant changes through `onDelta`.
@@ -15,15 +15,32 @@ final class HistoryModel: ObservableObject {
     private var pendingSave: DispatchWorkItem?
     private var purgeTimer: Timer?
 
-    static var supportDirectory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("PCP", isDirectory: true)
-    }
+    static let supportDirectory: URL = {
+        let files = FileManager.default
+        let base = files.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let directory = base.appendingPathComponent("PEA", isDirectory: true)
+        // PEA used to be called PCP. Move its history and sync state over once.
+        let legacy = base.appendingPathComponent("PCP", isDirectory: true)
+        if !files.fileExists(atPath: directory.path), files.fileExists(atPath: legacy.path) {
+            do {
+                try files.moveItem(at: legacy, to: directory)
+            } catch {
+                Log.app.error("Moving PCP history failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        return directory
+    }()
 
     init(prefs: Preferences) {
         self.prefs = prefs
         file = HistoryFile(url: Self.supportDirectory.appendingPathComponent("history.json"))
         var loaded = file.load() ?? ClipHistory(capacity: prefs.historyLimit)
+        // A saved limit above a never-set setting means the settings were
+        // reset: they follow the bundle id, which the PCP → PEA rename can
+        // change. Keep the clips instead of trimming them to the default.
+        if !prefs.hasStoredHistoryLimit, loaded.capacity > prefs.historyLimit {
+            prefs.historyLimit = loaded.capacity
+        }
         loaded.setCapacity(prefs.historyLimit)
         history = loaded
 

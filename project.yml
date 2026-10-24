@@ -1,32 +1,32 @@
 # Generate the Xcode project with:  brew install xcodegen && xcodegen
-name: PCP
+name: PEA
 options:
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
 
 packages:
-  PCPCore:
+  PEACore:
     path: Core
 
 targets:
-  PCP:
+  PEA:
     type: application
     platform: macOS
     sources:
       - path: App
     dependencies:
-      - package: PCPCore
+      - package: PEACore
     configFiles:
       Debug: Config/Signing.xcconfig
       Release: Config/Signing.xcconfig
     settings:
       base:
-        PRODUCT_NAME: PCP
-        PRODUCT_BUNDLE_IDENTIFIER: $(PCP_BUNDLE_ID)
+        PRODUCT_NAME: PEA
+        PRODUCT_BUNDLE_IDENTIFIER: $(PEA_BUNDLE_ID)
         INFOPLIST_FILE: Config/Info.plist
         GENERATE_INFOPLIST_FILE: NO
-        CODE_SIGN_ENTITLEMENTS: Config/PCP.entitlements
+        CODE_SIGN_ENTITLEMENTS: Config/PEA.entitlements
         CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_HARDENED_RUNTIME: YES
@@ -35,7 +35,7 @@ targets:
         CURRENT_PROJECT_VERSION: "3"
       configs:
         Debug:
-          PCP_APS_ENVIRONMENT: development
+          PEA_APS_ENVIRONMENT: development
         Release:
-          PCP_APS_ENVIRONMENT: production
+          PEA_APS_ENVIRONMENT: production
     scheme: {}

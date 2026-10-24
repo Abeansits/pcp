@@ -1,14 +1,15 @@
 // swift-tools-version:5.9
 import PackageDescription
 
-// Platform-independent logic for PCP (history, paste stack, secret detection,
-// search). Kept free of AppKit/CloudKit so it can be unit-tested anywhere.
+// Platform-independent logic for PEA (history, paste stack, secret detection,
+// search, window layout). Kept free of AppKit/CloudKit so it can be
+// unit-tested anywhere.
 let package = Package(
-    name: "PCPCore",
+    name: "PEACore",
     platforms: [.macOS(.v14)],
-    products: [.library(name: "PCPCore", targets: ["PCPCore"])],
+    products: [.library(name: "PEACore", targets: ["PEACore"])],
     targets: [
-        .target(name: "PCPCore"),
-        .testTarget(name: "PCPCoreTests", dependencies: ["PCPCore"]),
+        .target(name: "PEACore"),
+        .testTarget(name: "PEACoreTests", dependencies: ["PEACore"]),
     ]
 )

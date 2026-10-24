@@ -1,5 +1,5 @@
 import Foundation
-import PCPCore
+import PEACore
 
 enum SecretHandling: String, CaseIterable, Identifiable {
     /// Keep in memory for `secretTTL` seconds; never written to disk or synced.
@@ -39,8 +39,15 @@ final class Preferences: ObservableObject {
     @Published var recordingPaused: Bool { didSet { defaults.set(recordingPaused, forKey: Key.recordingPaused) } }
     @Published var historyShortcut: AppShortcut { didSet { store(historyShortcut, key: Key.historyShortcut) } }
     @Published var pasteShortcut: AppShortcut { didSet { store(pasteShortcut, key: Key.pasteShortcut) } }
+    @Published var windowShortcutsEnabled: Bool { didSet { defaults.set(windowShortcutsEnabled, forKey: Key.windowShortcutsEnabled) } }
     /// True while Settings is waiting for a new shortcut. Not saved.
     @Published var isCapturingShortcut = false
+    /// True once "Keep at most" was saved in this settings domain (changed
+    /// in Settings, or imported from PCP). False means it's the default.
+    var hasStoredHistoryLimit: Bool {
+        guard let id = Bundle.main.bundleIdentifier else { return true }
+        return defaults.persistentDomain(forName: id)?[Key.historyLimit] != nil
+    }
     var didPromptForAccessibility: Bool {
         get { defaults.bool(forKey: Key.didPromptForAccessibility) }
         set { defaults.set(newValue, forKey: Key.didPromptForAccessibility) }
@@ -59,6 +66,7 @@ final class Preferences: ObservableObject {
         static let didPromptForAccessibility = "didPromptForAccessibility"
         static let historyShortcut = "historyShortcut"
         static let pasteShortcut = "pasteShortcut"
+        static let windowShortcutsEnabled = "windowShortcutsEnabled"
     }
 
     private func store(_ shortcut: AppShortcut, key: String) {
@@ -73,7 +81,21 @@ final class Preferences: ObservableObject {
         return shortcut
     }
 
+    /// PEA used to be PCP. Without Config/Local.xcconfig its placeholder
+    /// bundle id went from com.example.pcp to com.example.pea, which starts
+    /// an empty settings domain. On PEA's first launch, copy PCP's over.
+    /// Only for that placeholder: a real bundle id is the user's choice.
+    private static func importPCPSettings(into defaults: UserDefaults) {
+        let id = "com.example.pea"
+        guard Bundle.main.bundleIdentifier == id,
+              defaults.persistentDomain(forName: id)?.isEmpty ?? true,
+              let legacy = defaults.persistentDomain(forName: "com.example.pcp"), !legacy.isEmpty
+        else { return }
+        defaults.setPersistentDomain(legacy, forName: id)
+    }
+
     private init() {
+        Self.importPCPSettings(into: defaults)
         defaults.register(defaults: [
             Key.historyLimit: ClipHistory.defaultCapacity,
             Key.pasteOrder: PasteOrder.firstInFirstOut.rawValue,
@@ -84,6 +106,7 @@ final class Preferences: ObservableObject {
             Key.secretTTL: 60.0,
             Key.ignoredApps: SecretDetector.defaultIgnoredApps,
             Key.recordingPaused: false,
+            Key.windowShortcutsEnabled: true,
         ])
         historyLimit = defaults.integer(forKey: Key.historyLimit)
         pasteOrder = PasteOrder(rawValue: defaults.string(forKey: Key.pasteOrder) ?? "") ?? .firstInFirstOut
@@ -96,5 +119,6 @@ final class Preferences: ObservableObject {
         recordingPaused = defaults.bool(forKey: Key.recordingPaused)
         historyShortcut = Self.loadShortcut(Key.historyShortcut, from: defaults, fallback: .showHistory)
         pasteShortcut = Self.loadShortcut(Key.pasteShortcut, from: defaults, fallback: .pasteNext)
+        windowShortcutsEnabled = defaults.bool(forKey: Key.windowShortcutsEnabled)
     }
 }

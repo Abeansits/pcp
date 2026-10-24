@@ -1,6 +1,6 @@
 import CloudKit
 import Foundation
-import PCPCore
+import PEACore
 import Security
 
 /// Syncs history through the user's private iCloud database with CKSyncEngine.

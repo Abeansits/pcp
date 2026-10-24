@@ -106,7 +106,23 @@ struct ShortcutField: View {
                 DispatchQueue.main.async { keys.stop() }
             }
         }
-        .onDisappear { keys.stop() }
+        // Switching Settings tabs or closing the window mid-recording must
+        // end it, or every global shortcut stays unregistered.
+        .onDisappear {
+            keys.stop()
+            endRecording()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { _ in
+            endRecording()
+        }
+    }
+
+    /// Never called from inside the key monitor, so stopping it here is safe.
+    private func endRecording() {
+        guard recording else { return }
+        keys.stop()
+        recording = false
+        onRecording(false)
     }
 
     private func listen() {

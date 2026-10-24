@@ -2,4 +2,6 @@
 // Team id: https://developer.apple.com/account → Membership details.
 DEVELOPMENT_TEAM = ABCDE12345
 // Must be unique to you; the iCloud container becomes iCloud.<this>.
-PCP_BUNDLE_ID = com.yourname.pcp
+// Coming from PCP? Keep the id you used there (e.g. com.yourname.pcp) so
+// iCloud history and settings carry over. See README, "Coming from PCP".
+PEA_BUNDLE_ID = com.yourname.pea

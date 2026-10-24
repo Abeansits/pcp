@@ -1,12 +1,20 @@
 import AppKit
 import Carbon.HIToolbox
 
+/// The key of a global shortcut.
+enum HotKey: Equatable {
+    /// Found in the current keyboard layout, so it follows Dvorak, AZERTY etc.
+    case character(Character)
+    /// A key that doesn't move between layouts: an arrow, ↩, ⌫ (`kVK_…`).
+    case code(Int)
+}
+
 /// System-wide shortcuts via Carbon's RegisterEventHotKey: no Accessibility
 /// permission needed, no third-party dependency, stable for 20+ years.
 @MainActor
 final class HotKeyCenter {
     private struct Entry {
-        let character: Character
+        let key: HotKey
         let modifiers: UInt32
         let action: () -> Void
         var ref: EventHotKeyRef?
@@ -15,7 +23,7 @@ final class HotKeyCenter {
     private var entries: [UInt32: Entry] = [:]
     private var nextID: UInt32 = 1
     private var handler: EventHandlerRef?
-    private static let signature: OSType = 0x5043_5021 // 'PCP!'
+    private static let signature: OSType = 0x5045_4121 // 'PEA!'
 
     init() {
         var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
@@ -44,17 +52,29 @@ final class HotKeyCenter {
     /// Registers ⌘⇧`character` etc. Returns false if another app already owns it.
     @discardableResult
     func register(_ character: Character, modifiers: UInt32, action: @escaping () -> Void) -> Bool {
+        register(.character(character), modifiers: modifiers, action: action)
+    }
+
+    @discardableResult
+    func register(_ key: HotKey, modifiers: UInt32, action: @escaping () -> Void) -> Bool {
         let id = nextID
         nextID += 1
-        entries[id] = Entry(character: character, modifiers: modifiers, action: action)
+        entries[id] = Entry(key: key, modifiers: modifiers, action: action)
         return install(id)
     }
 
     private func install(_ id: UInt32) -> Bool {
         guard var entry = entries[id] else { return false }
-        guard let keyCode = KeyboardLayout.keyCode(for: entry.character) ?? KeyboardLayout.ansiKeyCode(for: entry.character) else {
-            Log.app.error("No key code for shortcut \(String(entry.character), privacy: .public)")
-            return false
+        let keyCode: CGKeyCode
+        switch entry.key {
+        case .code(let code):
+            keyCode = CGKeyCode(code)
+        case .character(let character):
+            guard let code = KeyboardLayout.keyCode(for: character) ?? KeyboardLayout.ansiKeyCode(for: character) else {
+                Log.app.error("No key code for shortcut \(String(character), privacy: .public)")
+                return false
+            }
+            keyCode = code
         }
         var ref: EventHotKeyRef?
         let status = RegisterEventHotKey(
@@ -64,7 +84,7 @@ final class HotKeyCenter {
         entry.ref = ref
         entries[id] = entry
         if status != noErr {
-            Log.app.error("Could not register shortcut for \(String(entry.character), privacy: .public): \(status)")
+            Log.app.error("Could not register shortcut for key \(keyCode): \(status)")
         }
         return status == noErr
     }
@@ -76,9 +96,16 @@ final class HotKeyCenter {
         entries.removeAll()
     }
 
+    /// Releases every hot key before installing any: a new layout can move
+    /// one shortcut onto a key another still holds (the ⌃⌥ letters swap
+    /// places between QWERTY and Dvorak). Ids follow registration order, so
+    /// the clipboard shortcuts keep their priority.
     private func reregisterAll() {
-        for (id, entry) in entries {
-            if let ref = entry.ref { UnregisterEventHotKey(ref) }
+        for id in entries.keys {
+            if let ref = entries[id]?.ref { UnregisterEventHotKey(ref) }
+            entries[id]?.ref = nil
+        }
+        for id in entries.keys.sorted() {
             _ = install(id)
         }
     }
