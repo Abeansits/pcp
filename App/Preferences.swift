@@ -42,6 +42,12 @@ final class Preferences: ObservableObject {
     @Published var windowShortcutsEnabled: Bool { didSet { defaults.set(windowShortcutsEnabled, forKey: Key.windowShortcutsEnabled) } }
     /// True while Settings is waiting for a new shortcut. Not saved.
     @Published var isCapturingShortcut = false
+    /// True once "Keep at most" was saved in this settings domain (changed
+    /// in Settings, or imported from PCP). False means it's the default.
+    var hasStoredHistoryLimit: Bool {
+        guard let id = Bundle.main.bundleIdentifier else { return true }
+        return defaults.persistentDomain(forName: id)?[Key.historyLimit] != nil
+    }
     var didPromptForAccessibility: Bool {
         get { defaults.bool(forKey: Key.didPromptForAccessibility) }
         set { defaults.set(newValue, forKey: Key.didPromptForAccessibility) }
@@ -78,11 +84,12 @@ final class Preferences: ObservableObject {
     /// PEA used to be PCP. Without Config/Local.xcconfig its placeholder
     /// bundle id went from com.example.pcp to com.example.pea, which starts
     /// an empty settings domain. On PEA's first launch, copy PCP's over.
+    /// Only for that placeholder: a real bundle id is the user's choice.
     private static func importPCPSettings(into defaults: UserDefaults) {
-        let legacyID = "com.example.pcp"
-        guard let id = Bundle.main.bundleIdentifier, id != legacyID,
+        let id = "com.example.pea"
+        guard Bundle.main.bundleIdentifier == id,
               defaults.persistentDomain(forName: id)?.isEmpty ?? true,
-              let legacy = defaults.persistentDomain(forName: legacyID), !legacy.isEmpty
+              let legacy = defaults.persistentDomain(forName: "com.example.pcp"), !legacy.isEmpty
         else { return }
         defaults.setPersistentDomain(legacy, forName: id)
     }

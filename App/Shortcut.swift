@@ -117,8 +117,10 @@ struct ShortcutField: View {
         }
     }
 
+    /// Never called from inside the key monitor, so stopping it here is safe.
     private func endRecording() {
         guard recording else { return }
+        keys.stop()
         recording = false
         onRecording(false)
     }
