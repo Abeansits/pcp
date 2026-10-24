@@ -35,6 +35,12 @@ final class HistoryModel: ObservableObject {
         self.prefs = prefs
         file = HistoryFile(url: Self.supportDirectory.appendingPathComponent("history.json"))
         var loaded = file.load() ?? ClipHistory(capacity: prefs.historyLimit)
+        // A saved limit above the setting means the settings were reset: they
+        // follow the bundle id, which the PCP → PEA rename can change. Keep
+        // the clips instead of trimming them to the default.
+        if loaded.capacity > prefs.historyLimit {
+            prefs.historyLimit = loaded.capacity
+        }
         loaded.setCapacity(prefs.historyLimit)
         history = loaded
 

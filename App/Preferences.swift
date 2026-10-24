@@ -75,7 +75,20 @@ final class Preferences: ObservableObject {
         return shortcut
     }
 
+    /// PEA used to be PCP. Without Config/Local.xcconfig its placeholder
+    /// bundle id went from com.example.pcp to com.example.pea, which starts
+    /// an empty settings domain. On PEA's first launch, copy PCP's over.
+    private static func importPCPSettings(into defaults: UserDefaults) {
+        let legacyID = "com.example.pcp"
+        guard let id = Bundle.main.bundleIdentifier, id != legacyID,
+              defaults.persistentDomain(forName: id)?.isEmpty ?? true,
+              let legacy = defaults.persistentDomain(forName: legacyID), !legacy.isEmpty
+        else { return }
+        defaults.setPersistentDomain(legacy, forName: id)
+    }
+
     private init() {
+        Self.importPCPSettings(into: defaults)
         defaults.register(defaults: [
             Key.historyLimit: ClipHistory.defaultCapacity,
             Key.pasteOrder: PasteOrder.firstInFirstOut.rawValue,

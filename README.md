@@ -56,12 +56,20 @@ Moving another app's windows needs the **Accessibility** permission. PEA asks th
 PEA is PCP renamed. On first launch it moves `~/Library/Application Support/PCP/` to `PEA/`, so your history and sync state carry over. Some things are tied to the old name or signature and need a one-time redo:
 
 - **The old app.** Quit `PCP.app` and move it to the Trash. Two copies would both record copies. If PCP was a login item, turn **Launch at login** off in PCP first, then on in PEA.
-- **Bundle id.** If `Config/Local.xcconfig` sets `PCP_BUNDLE_ID`, rename that line to `PEA_BUNDLE_ID` and keep the value. The bundle id picks the iCloud container and your settings, so keeping it keeps both. Without a Local.xcconfig the placeholder id changes from `com.example.pcp` to `com.example.pea`, and settings start from the defaults.
+- **Bundle id.** If `Config/Local.xcconfig` sets `PCP_BUNDLE_ID`, rename that line to `PEA_BUNDLE_ID` and keep the value. The bundle id picks the iCloud container and your settings, so keeping it keeps both. Without a Local.xcconfig the placeholder id changes from `com.example.pcp` to `com.example.pea`; PEA copies PCP's settings over on its first launch. If settings do start from the defaults anyway, PEA still keeps every migrated clip: it raises "Keep at most" to the limit the history was saved with.
 - **Permissions.** `make install` now signs with a new **PEA Local** certificate, so macOS asks for the paste permission once more. Remove the old PCP row in that Settings list.
 
 ## Build & install
 
 Requirements: macOS 14+, Xcode 16+, [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
+
+On a new Mac, check that the build tools point at Xcode: `xcode-select -p` should print a path inside `Xcode.app`. Installing Homebrew points them at the Command Line Tools instead, and then `make install` stops with "xcodebuild requires Xcode". Fix it once with:
+
+```sh
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer && sudo xcodebuild -runFirstLaunch
+```
+
+The second command accepts the Xcode license and installs Xcode's extra components, which you otherwise get by opening Xcode once.
 
 iCloud sync needs a **paid** Apple Developer Program membership. A free Apple ID cannot create an iCloud container. Its Personal Team profiles also expire after 7 days, and every re-sign asks for the paste permission again. For one Mac and no sync, use `make install`.
 
@@ -83,7 +91,7 @@ Deleting the PEA Local certificate, or signing with a different one, makes macOS
 make release NOTES="What changed."
 ```
 
-That builds the same signed app, zips it, and publishes `PEA-<version>.zip` as a GitHub release. The version comes from `MARKETING_VERSION` in `project.yml`. The zip is signed with your PEA Local certificate, so it is not notarized. The release notes should say to open the app once from Finder. People who install a later release signed with that same certificate keep the paste permission.
+That builds the same signed app, zips it, and publishes `PEA-<version>.zip` as a GitHub release. The version comes from `MARKETING_VERSION` in `project.yml`. The zip is signed with your PEA Local certificate, so it is not notarized. The release notes should say how to open it the first time: on macOS 15 or later, open PEA, click Done when macOS refuses, then click **Open Anyway** in System Settings → Privacy & Security. On macOS 14, Control-click PEA in Finder and choose Open. People who install a later release signed with that same certificate keep the paste permission.
 
 ### iCloud sync
 

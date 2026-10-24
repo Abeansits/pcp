@@ -96,9 +96,16 @@ final class HotKeyCenter {
         entries.removeAll()
     }
 
+    /// Releases every hot key before installing any: a new layout can move
+    /// one shortcut onto a key another still holds (the ⌃⌥ letters swap
+    /// places between QWERTY and Dvorak). Ids follow registration order, so
+    /// the clipboard shortcuts keep their priority.
     private func reregisterAll() {
-        for (id, entry) in entries {
-            if let ref = entry.ref { UnregisterEventHotKey(ref) }
+        for id in entries.keys {
+            if let ref = entries[id]?.ref { UnregisterEventHotKey(ref) }
+            entries[id]?.ref = nil
+        }
+        for id in entries.keys.sorted() {
             _ = install(id)
         }
     }

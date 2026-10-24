@@ -3,5 +3,5 @@
 DEVELOPMENT_TEAM = ABCDE12345
 // Must be unique to you; the iCloud container becomes iCloud.<this>.
 // Coming from PCP? Keep the id you used there (e.g. com.yourname.pcp) so
-// iCloud history, settings and the paste permission carry over.
+// iCloud history and settings carry over. See README, "Coming from PCP".
 PEA_BUNDLE_ID = com.yourname.pea
