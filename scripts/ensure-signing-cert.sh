@@ -11,6 +11,9 @@ set -euo pipefail
 NAME="${PEA_SIGN_ID:-PEA Local}"
 KEYCHAIN="${HOME}/Library/Keychains/pea-signing.keychain-db"
 KEYCHAIN_PASSWORD="pea-local"
+# macOS's own LibreSSL. Homebrew's OpenSSL 3, often first on PATH, writes
+# PKCS#12 files with newer encryption that `security import` can reject.
+OPENSSL=/usr/bin/openssl
 
 add_to_search_list() {
     local current
@@ -47,9 +50,9 @@ keyUsage = critical, digitalSignature
 extendedKeyUsage = critical, codeSigning
 EOF
 
-openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
+"${OPENSSL}" req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
     -keyout "${work}/key.pem" -out "${work}/cert.pem" -config "${work}/cert.conf" >/dev/null 2>&1
-openssl pkcs12 -export -out "${work}/cert.p12" \
+"${OPENSSL}" pkcs12 -export -out "${work}/cert.p12" \
     -inkey "${work}/key.pem" -in "${work}/cert.pem" \
     -name "${NAME}" -passout "pass:${KEYCHAIN_PASSWORD}" >/dev/null 2>&1
 

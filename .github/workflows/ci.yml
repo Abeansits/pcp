@@ -20,3 +20,7 @@ jobs:
           xcodebuild -project PEA.xcodeproj -scheme PEA -configuration Debug \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGN_ENTITLEMENTS= build
+      - name: Install like a person does
+        # make install: Release build, signed with a self-made "PEA Local"
+        # identity, copied into a scratch folder. OPEN=0 skips the launch.
+        run: make install PREFIX="$RUNNER_TEMP/Applications" OPEN=0

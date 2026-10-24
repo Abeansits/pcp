@@ -2,6 +2,8 @@
 
 # Where `make install` puts the app. Override with PREFIX=/Applications.
 PREFIX ?= $(HOME)/Applications
+# OPEN=0 installs without launching the app (CI does this).
+OPEN ?= 1
 # Stable local identity. See scripts/ensure-signing-cert.sh.
 SIGN_ID ?= PEA Local
 SIGN_KEYCHAIN ?= $(HOME)/Library/Keychains/pea-signing.keychain-db
@@ -30,13 +32,22 @@ sign: unsigned
 	bash scripts/ensure-signing-cert.sh
 	codesign --force --sign "$(SIGN_ID)" --keychain "$(SIGN_KEYCHAIN)" --timestamp=none "$(APP)"
 
+# Quits a running PEA (SIGTERM makes it save and quit normally), replaces
+# the app, and opens the new one.
 install: sign
+	@if pkill -x PEA; then \
+		echo "Quitting the running PEA…"; \
+		for i in $$(seq 50); do pgrep -x PEA >/dev/null || break; sleep 0.1; done; \
+		if pgrep -x PEA >/dev/null; then echo "PEA didn't quit. Quit it from the menu bar, then run make install again."; exit 1; fi; \
+	fi
 	mkdir -p "$(PREFIX)"
+	rm -rf "$(PREFIX)/PEA.app"
 	ditto "$(APP)" "$(PREFIX)/PEA.app"
 	codesign --force --sign "$(SIGN_ID)" --keychain "$(SIGN_KEYCHAIN)" --timestamp=none "$(PREFIX)/PEA.app"
-	@echo "Installed: $(PREFIX)/PEA.app"
-	@echo "Signed with \"$(SIGN_ID)\". Quit any running PEA, then open this copy."
+	@echo "Installed: $(PREFIX)/PEA.app, signed with \"$(SIGN_ID)\"."
 	@test ! -d "$(PREFIX)/PCP.app" || echo "$(PREFIX)/PCP.app is the old name of this app. Quit it and move it to the Trash."
+	@if pgrep -x PCP >/dev/null; then echo "PCP, the old name of this app, is still running. Quit it from its menu bar icon."; fi
+	@if [ "$(OPEN)" = 1 ]; then open "$(PREFIX)/PEA.app" && echo "Opened PEA. Its icon is the paperclip in the menu bar."; fi
 
 # Zip a signed app and publish it. NOTES is the release text.
 #   make release NOTES="First release."
