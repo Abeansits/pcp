@@ -42,7 +42,7 @@ public struct ClipItem: Codable, Hashable, Identifiable, Sendable {
 
     public var hasRichText: Bool { html != nil || rtf != nil }
 
-    /// Single-line preview with whitespace collapsed, for list rows.
+    /// Single-line preview with whitespace collapsed, for the menu and tooltip.
     public func preview(maxLength: Int = 200) -> String {
         if isSensitive { return String(repeating: "•", count: min(max(text.count, 8), 16)) }
         var out = ""
@@ -59,6 +59,33 @@ public struct ClipItem: Codable, Hashable, Identifiable, Sendable {
             if out.count >= maxLength { out.append("…"); break }
         }
         return out.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// At most two lines for a history row. Blank lines are skipped so a
+    /// paragraph break still shows the next sentence. The stored text is
+    /// left as copied, including its original line breaks.
+    public func listPreview(maxLines: Int = 2) -> String {
+        if isSensitive { return preview() }
+        let normalized = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .replacingOccurrences(of: "\u{2028}", with: "\n")
+            .replacingOccurrences(of: "\u{2029}", with: "\n")
+        var lines: [String] = []
+        var more = false
+        for raw in normalized.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = raw.replacingOccurrences(of: "\t", with: " ")
+                .trimmingCharacters(in: .whitespaces)
+            if line.isEmpty { continue }
+            if lines.count == maxLines {
+                more = true
+                break
+            }
+            lines.append(line)
+        }
+        guard var last = lines.last else { return preview() }
+        if more { last += "…"; lines[lines.count - 1] = last }
+        return lines.joined(separator: "\n")
     }
 }
 

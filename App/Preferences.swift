@@ -40,6 +40,7 @@ final class Preferences: ObservableObject {
     @Published var historyShortcut: AppShortcut { didSet { store(historyShortcut, key: Key.historyShortcut) } }
     @Published var pasteShortcut: AppShortcut { didSet { store(pasteShortcut, key: Key.pasteShortcut) } }
     @Published var windowShortcutsEnabled: Bool { didSet { defaults.set(windowShortcutsEnabled, forKey: Key.windowShortcutsEnabled) } }
+    @Published var clipboardShortcutsEnabled: Bool { didSet { defaults.set(clipboardShortcutsEnabled, forKey: Key.clipboardShortcutsEnabled) } }
     /// True while Settings is waiting for a new shortcut. Not saved.
     @Published var isCapturingShortcut = false
     /// True once "Keep at most" was saved in this settings domain (changed
@@ -67,6 +68,7 @@ final class Preferences: ObservableObject {
         static let historyShortcut = "historyShortcut"
         static let pasteShortcut = "pasteShortcut"
         static let windowShortcutsEnabled = "windowShortcutsEnabled"
+        static let clipboardShortcutsEnabled = "clipboardShortcutsEnabled"
     }
 
     private func store(_ shortcut: AppShortcut, key: String) {
@@ -107,6 +109,7 @@ final class Preferences: ObservableObject {
             Key.ignoredApps: SecretDetector.defaultIgnoredApps,
             Key.recordingPaused: false,
             Key.windowShortcutsEnabled: true,
+            Key.clipboardShortcutsEnabled: true,
         ])
         historyLimit = defaults.integer(forKey: Key.historyLimit)
         pasteOrder = PasteOrder(rawValue: defaults.string(forKey: Key.pasteOrder) ?? "") ?? .firstInFirstOut
@@ -120,5 +123,6 @@ final class Preferences: ObservableObject {
         historyShortcut = Self.loadShortcut(Key.historyShortcut, from: defaults, fallback: .showHistory)
         pasteShortcut = Self.loadShortcut(Key.pasteShortcut, from: defaults, fallback: .pasteNext)
         windowShortcutsEnabled = defaults.bool(forKey: Key.windowShortcutsEnabled)
+        clipboardShortcutsEnabled = defaults.bool(forKey: Key.clipboardShortcutsEnabled)
     }
 }

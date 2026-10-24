@@ -1,38 +1,7 @@
 import AppKit
 import PEACore
-import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers
-
-/// Settings, one toolbar tab per tool.
-@MainActor
-enum SettingsWindow {
-    static func make(prefs: Preferences, sync: CloudSync, onClearHistory: @escaping () -> Void) -> NSWindow {
-        let tabs = NSTabViewController()
-        tabs.tabStyle = .toolbar
-        tabs.addTabViewItem(tab("Clipboard", symbol: "doc.on.clipboard",
-                                ClipboardSettingsView(prefs: prefs, sync: sync, onClearHistory: onClearHistory)))
-        tabs.addTabViewItem(tab("Windows", symbol: "rectangle.split.2x1", WindowSettingsView(prefs: prefs)))
-        tabs.addTabViewItem(tab("General", symbol: "gearshape", GeneralSettingsView()))
-
-        let window = NSWindow(contentViewController: tabs)
-        window.styleMask = [.titled, .closable]
-        window.toolbarStyle = .preference
-        window.isReleasedWhenClosed = false
-        window.center()
-        return window
-    }
-
-    private static func tab(_ label: String, symbol: String, _ view: some View) -> NSTabViewItem {
-        let host = NSHostingController(rootView: view)
-        // The window takes each tab's size when you switch to it.
-        host.sizingOptions = .preferredContentSize
-        let item = NSTabViewItem(viewController: host)
-        item.label = label
-        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
-        return item
-    }
-}
 
 struct ClipboardSettingsView: View {
     @ObservedObject var prefs: Preferences
@@ -43,7 +12,8 @@ struct ClipboardSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Shortcuts") {
+            Section {
+                Toggle("Clipboard shortcuts", isOn: $prefs.clipboardShortcutsEnabled)
                 ShortcutField(title: "Show history & search", shortcut: $prefs.historyShortcut, reserved: prefs.pasteShortcut) {
                     prefs.isCapturingShortcut = $0
                 }
@@ -59,6 +29,11 @@ struct ClipboardSettingsView: View {
                 LabeledContent("Pick item in history", value: "⌘1 … ⌘9, ↩")
                 Text("Click a shortcut, then type a new one. It needs ⌘, ⌥, or ⌃.")
                     .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Shortcuts")
+            } footer: {
+                Text("The menu bar's history and paste items work with the shortcuts off.")
                     .foregroundStyle(.secondary)
             }
 
@@ -136,40 +111,6 @@ struct ClipboardSettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             accessibilityGranted = Paster.canPostEvents
         }
-    }
-}
-
-struct GeneralSettingsView: View {
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-
-    private var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
-    }
-
-    var body: some View {
-        Form {
-            Section {
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, enabled in
-                        do {
-                            if enabled { try SMAppService.mainApp.register() }
-                            else { try SMAppService.mainApp.unregister() }
-                        } catch {
-                            Log.app.error("Login item change failed: \(error.localizedDescription, privacy: .public)")
-                            launchAtLogin = SMAppService.mainApp.status == .enabled
-                        }
-                    }
-            } footer: {
-                Text("Turn this on after PEA is in its final folder. The login item points at that path.")
-                    .foregroundStyle(.secondary)
-            }
-            Section("About") {
-                LabeledContent("PEA", value: "Personal Everything App")
-                LabeledContent("Version", value: version)
-            }
-        }
-        .formStyle(.grouped)
-        .frame(width: 520, height: 260)
     }
 }
 

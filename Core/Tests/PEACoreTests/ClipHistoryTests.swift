@@ -359,4 +359,14 @@ final class ClipHistoryTests: XCTestCase {
         let secret = ClipItem(text: "abc", createdAt: t0, isSensitive: true)
         XCTAssertEqual(secret.preview(), "••••••••")
     }
+
+    func testListPreviewKeepsTwoLines() {
+        let item = ClipItem(text: "  hello\n\n  world\t!  ", createdAt: t0)
+        XCTAssertEqual(item.listPreview(), "hello\nworld !")
+        let wrapped = ClipItem(text: "a\r\nb\rc", createdAt: t0)
+        XCTAssertEqual(wrapped.listPreview(), "a\nb…")
+        XCTAssertEqual(ClipItem(text: "only", createdAt: t0).listPreview(), "only")
+        let secret = ClipItem(text: "secret\nline", createdAt: t0, isSensitive: true)
+        XCTAssertEqual(secret.listPreview(), secret.preview())
+    }
 }

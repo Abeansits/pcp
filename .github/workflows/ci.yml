@@ -9,6 +9,8 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Check names
+        run: bash scripts/check-names.sh
       - name: Core tests
         run: cd Core && swift test
       - name: Generate Xcode project
@@ -24,3 +26,13 @@ jobs:
         # make install: Release build, signed with a self-made "PEA Local"
         # identity, copied into a scratch folder. OPEN=0 skips the launch.
         run: make install PREFIX="$RUNNER_TEMP/Applications" OPEN=0
+
+  core-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0"
+      - name: Core tests
+        run: cd Core && swift test

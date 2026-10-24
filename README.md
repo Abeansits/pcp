@@ -17,7 +17,7 @@ PEA used to be PCP, the clipboard manager alone. See [Coming from PCP](#coming-f
 | **⇧⌘V** | paste the next item from the stack and pop it: copy, copy, copy → paste, paste, paste |
 | **⌥⇧⌘V** | same, but keep links and styling when the clip has any |
 
-⇧⌘C and ⇧⌘V are the defaults. Change them in Settings. The menu bar paperclip shows how many items are waiting, and its tooltip names the one ⇧⌘V will paste.
+⇧⌘C and ⇧⌘V are the defaults. Change them in Settings. Settings → Clipboard can switch the clipboard shortcuts off. Show History, Paste Next, and Paste Next with Style stay in the menu and hide their key equivalents while that switch is off. Pause recording is a different switch. The menu bar paperclip shows how many items are waiting, and its tooltip names the one ⇧⌘V will paste.
 
 ### Features
 
@@ -124,16 +124,19 @@ make install    # Release app in ~/Applications, signed with PEA Local, no iClou
 make release NOTES="…"  # zip that app and publish a GitHub release
 ```
 
+How the menu-bar shell fits together is in the [architecture](docs/architecture.md).
+
 Layout:
 
 ```
 Core/           PEACore Swift package: history, stack, dedupe/merge, secret detection, search,
                 persistence, window layout geometry (pure Foundation, tested)
 App/            menu bar, hot keys, settings window
+App/Shell/      tool protocol, host, General settings
 App/Clipboard/  pasteboard monitor, paste injection, history panel, CloudKit sync
 App/Windows/    Accessibility window mover, window shortcuts, Windows settings tab
 Config/         Info.plist, entitlements, signing xcconfig
-docs/           roadmap and per-tool specs
+docs/           roadmap, architecture, and per-tool specs
 ```
 
 How sync converges: each clip is a CloudKit record with a random UUID. If two Macs record the same text independently, both keep the record with the smaller UUID and delete the other, so they end up identical without coordinating. For timestamps, the newest one wins. Deletions and the history limit propagate to every device, so the smallest limit you set on any Mac applies to all of them.

@@ -351,14 +351,10 @@ private struct Row: View {
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .top, spacing: 8) {
             stackBadge
             marker
-            Text(item.isSensitive ? item.preview() : item.text)
-                .lineLimit(2)
-                .truncationMode(.tail)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            preview
             Text(Self.age(item.lastUsedAt))
                 .font(.caption)
                 .foregroundStyle(muted)
@@ -377,6 +373,25 @@ private struct Row: View {
         )
         .onHover { hovered = $0 }
         .help(item.isSensitive ? "" : String(item.text.prefix(600)))
+    }
+
+    /// One `Text` per preview line. A single `Text` with `lineLimit(2)` and
+    /// `fixedSize` takes the height of the unwrapped string, then wraps and
+    /// paints the extra lines over the next row.
+    private var preview: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(previewLines.enumerated()), id: \.offset) { _, line in
+                Text(line)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var previewLines: [String] {
+        let lines = item.listPreview().split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        return lines.isEmpty ? [""] : lines
     }
 
     private var stackBadge: some View {

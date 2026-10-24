@@ -6,7 +6,7 @@ PEA (Personal Everything App) is one menu bar app holding the small Mac tools I 
 
 - **macOS only.** AppKit and SwiftUI, public APIs, no third-party packages.
 - **One app.** One menu bar icon, one Settings window with a tab per tool.
-- **Off means off.** A tool that's switched off registers no shortcuts. (Clipboard can only pause recording so far.)
+- **Off means off.** A tool that's switched off registers no shortcuts. Its menu items still run. Clipboard's shortcut switch is separate from Pause recording.
 - **Private.** Nothing leaves the Mac except your own iCloud sync. No analytics.
 - **Tested core.** Logic that doesn't need the OS goes in `PEACore` with unit tests; `App/<Tool>/` holds the OS glue.
 
@@ -48,6 +48,6 @@ Select text and get a small bar of actions next to it, like PopClip.
 
 1. Write a short spec in `docs/specs/<tool>.md`: goal, non-goals, shortcuts, permissions, test plan.
 2. Put the pure logic in `Core/Sources/PEACore/` with tests.
-3. Put the OS code in `App/<Tool>/`, a Settings tab in `SettingsWindow`, and a submenu in the menu bar menu.
-4. Give it an on/off switch in `Preferences`.
+3. Put the OS code in `App/<Tool>/` as a `PEATool`, then add that value to `PEAHost`'s tool list. The list order is the Settings tab order and the status-menu order. A nil `statusMenuTitle` puts items on the root menu; a title puts them in a submenu. See the [architecture](architecture.md).
+4. Add its shortcut switch to `Preferences`, default on. Off registers no shortcuts; the menu items still run.
 5. Add it to this table and to the README.
